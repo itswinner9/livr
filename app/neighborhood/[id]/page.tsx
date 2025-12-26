@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { Star, MapPin, Shield, Sparkles, Volume2, Users, Train, Package, Calendar, ArrowLeft, ChevronLeft, ChevronRight, MessageCircle, User, X, Camera } from 'lucide-react'
+import { Star, MapPin, Shield, Sparkles, Volume2, Users, Train, Package, Calendar, ArrowLeft, ChevronLeft, ChevronRight, MessageCircle, User, X, Camera, ThumbsUp, ThumbsDown } from 'lucide-react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import type { Neighborhood, NeighborhoodReview } from '@/lib/supabase'
@@ -31,6 +31,7 @@ export default function NeighborhoodDetail() {
 
   const fetchNeighborhood = async (idOrSlug: string) => {
     try {
+      setLoading(true)
       console.log('Fetching neighborhood:', idOrSlug)
       
       // Try to fetch by slug first (SEO-friendly), fallback to ID
@@ -111,15 +112,15 @@ export default function NeighborhoodDetail() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <main className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-primary-500"></div>
-      </div>
+      </main>
     )
   }
 
   if (!neighborhood) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <main className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
           <MapPin className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <p className="text-gray-500">Neighborhood not found</p>
@@ -127,7 +128,7 @@ export default function NeighborhoodDetail() {
             Back to Explore
           </Link>
         </div>
-      </div>
+      </main>
     )
   }
 
@@ -150,16 +151,16 @@ export default function NeighborhoodDetail() {
           <span className="font-medium">Back to Explore</span>
         </Link>
 
-        <div className="bg-white rounded-2xl shadow-2xl overflow-hidden border border-gray-200">
+        <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-gray-100">
           {/* Cover Image / Image Gallery */}
-          <div className="relative h-[400px] lg:h-[500px] bg-gradient-to-br from-blue-500 to-blue-600 overflow-hidden">
+          <div className="relative h-[50vh] min-h-[400px] max-h-[600px] bg-gradient-to-br from-blue-500 via-indigo-600 to-purple-600 overflow-hidden">
             {/* Cover Image or User Photos */}
             {(neighborhood.cover_image || allImages.length > 0) ? (
               <>
                 <img
                   src={neighborhood.cover_image || allImages[currentImageIndex]}
                   alt={`${neighborhood.name} in ${neighborhood.city}`}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover cursor-pointer hover:opacity-95 transition-opacity duration-300"
                   onClick={() => {
                     if (allImages.length > 0) {
                       setShowImageGallery(true)
@@ -229,32 +230,45 @@ export default function NeighborhoodDetail() {
               </div>
             )}
             
-            {/* Location Info Overlay */}
-            <div className="absolute bottom-0 left-0 right-0 p-6 lg:p-8">
-              <div className="flex items-end justify-between">
-                <div className="text-white">
-                  <h1 className="text-3xl lg:text-4xl xl:text-5xl font-bold mb-2 drop-shadow-lg">
+            {/* Enhanced Title Overlay with Rating */}
+            <div className="absolute bottom-0 left-0 right-0 p-6 lg:p-8 bg-gradient-to-t from-black/90 via-black/60 to-transparent">
+              <div className="flex items-end justify-between gap-4">
+                <div>
+                  <h1 className="text-3xl lg:text-4xl xl:text-5xl font-bold text-white drop-shadow-2xl mb-2">
                     {neighborhood.name}
                   </h1>
-                  <div className="flex items-center space-x-2 text-white/90 text-base lg:text-lg drop-shadow-md">
+                  <div className="flex items-center space-x-2 text-white/90">
                     <MapPin className="w-5 h-5" />
-                    <span>{neighborhood.city}, {neighborhood.province}, Canada</span>
+                    <span className="text-base lg:text-lg">{neighborhood.city}, {neighborhood.province}</span>
                   </div>
                 </div>
                 
-                {/* Rating Badge */}
-                {neighborhood.average_rating > 0 && (
-                  <div className="bg-white/95 backdrop-blur-md px-6 py-4 rounded-2xl shadow-2xl">
-                    <div className="text-center">
+                {/* Animated Rating Badge */}
+                {(neighborhood.overall_rating || neighborhood.average_rating) > 0 && (
+                  <div className="relative bg-white/10 backdrop-blur-md rounded-2xl px-6 py-4 border border-white/20 shadow-2xl">
                       <div className="flex items-center justify-center space-x-2 mb-1">
-                        <Star className="w-6 h-6 text-yellow-500 fill-yellow-500" />
-                        <span className="text-4xl font-bold text-gray-900">
-                          {neighborhood.average_rating.toFixed(1)}
+                      <Star className="w-8 h-8 text-yellow-400 fill-yellow-400 animate-pulse" />
+                      <span className="text-5xl font-bold bg-gradient-to-r from-yellow-300 via-yellow-400 to-yellow-300 bg-clip-text text-transparent animate-gradient">
+                        {(neighborhood.overall_rating || neighborhood.average_rating || 0).toFixed(1)}
                         </span>
                       </div>
-                      <div className="text-xs text-gray-600 font-medium">
-                        {neighborhood.total_reviews} Review{neighborhood.total_reviews !== 1 ? 's' : ''}
+                    <div className="text-xs text-white/80 text-center font-medium">
+                      {neighborhood.total_reviews || 0} Review{(neighborhood.total_reviews || 0) !== 1 ? 's' : ''}
                       </div>
+                    {/* Sparkle effects */}
+                    <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-2xl">
+                      {[...Array(8)].map((_, i) => (
+                        <div
+                          key={i}
+                          className="absolute w-1 h-1 bg-yellow-400 rounded-full animate-sparkle"
+                          style={{
+                            left: `${Math.random() * 100}%`,
+                            top: `${Math.random() * 100}%`,
+                            animationDelay: `${Math.random() * 2}s`,
+                            animationDuration: `${2 + Math.random() * 2}s`
+                          }}
+                        />
+                      ))}
                     </div>
                   </div>
                 )}
@@ -262,323 +276,417 @@ export default function NeighborhoodDetail() {
             </div>
           </div>
 
-          {/* Content */}
-          <div className="p-6 lg:p-8 xl:p-12">
-            {/* Compact Stats Bar */}
-            <div className="flex items-center gap-6 mb-6">
-              <div className="text-center">
-                <div className="flex items-center space-x-1 mb-1">
-                  <Star className="w-5 h-5 text-yellow-500 fill-yellow-500" />
-                  <span className="text-2xl font-bold text-gray-900">
-                    {neighborhood.average_rating > 0 ? neighborhood.average_rating.toFixed(1) : 'N/A'}
-                  </span>
-                </div>
-                <div className="text-xs text-gray-600">{neighborhood.total_reviews || 0} reviews</div>
-              </div>
-              
-              <div className="h-10 w-px bg-gray-200"></div>
-              
-              <div className="text-center">
-                <div className="text-xl font-bold text-gray-900 mb-1">{allImages.length}</div>
-                <div className="text-xs text-gray-600">Photos</div>
-              </div>
-              
-              <div className="h-10 w-px bg-gray-200 hidden sm:block"></div>
-              
-              <div className="text-center hidden sm:block">
-                <div className="text-sm font-semibold text-gray-900 mb-1">
-                  {reviews.length > 0 ? new Date(Math.max(...reviews.map(r => new Date(r.created_at).getTime()))).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : 'N/A'}
-                </div>
-                <div className="text-xs text-gray-600">Latest</div>
-              </div>
-            </div>
-
-            {/* Prominent CTA Card - At the top */}
-            <div className="bg-gradient-to-r from-primary-500 to-primary-600 rounded-xl p-6 mb-8 shadow-lg">
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div className="text-white text-center sm:text-left">
-                  <h3 className="text-xl font-bold mb-1">Have experience with this neighborhood?</h3>
-                  <p className="text-primary-100 text-sm">Share your rating and help others make informed decisions</p>
-                </div>
-                <Link
-                  href={`/rate/neighborhood?prefill=${encodeURIComponent(JSON.stringify({
-                    name: neighborhood.name,
-                    city: neighborhood.city,
-                    province: neighborhood.province,
-                    latitude: neighborhood.latitude,
-                    longitude: neighborhood.longitude
-                  }))}`}
-                  className="bg-white text-primary-600 px-8 py-3 rounded-lg hover:bg-gray-50 transition-all font-bold shadow-md flex items-center space-x-2 whitespace-nowrap"
-                >
-                  <Star className="w-5 h-5" />
-                  <span>Rate</span>
-                </Link>
-              </div>
-            </div>
-
-
-            {/* Category Ratings - Show if reviews exist */}
-            {reviews.length > 0 && (
-              <div className="mb-8">
-                <h2 className="text-xl font-bold text-gray-900 mb-1">Category Breakdown</h2>
-                <p className="text-sm text-gray-600 mb-4">
-                  {neighborhood.name} Safety, Cleanliness, Noise, Transit & Community Ratings
-                </p>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                  {[
-                    { id: 'safety', label: 'Safety', icon: Shield, avg: reviews.reduce((sum, r) => sum + r.safety, 0) / reviews.length, color: 'text-green-600' },
-                    { id: 'cleanliness', label: 'Cleanliness', icon: Sparkles, avg: reviews.reduce((sum, r) => sum + r.cleanliness, 0) / reviews.length, color: 'text-blue-600' },
-                    { id: 'noise', label: 'Noise Level', icon: Volume2, avg: reviews.reduce((sum, r) => sum + r.noise, 0) / reviews.length, color: 'text-purple-600' },
-                    { id: 'community', label: 'Community', icon: Users, avg: reviews.reduce((sum, r) => sum + r.community, 0) / reviews.length, color: 'text-pink-600' },
-                    { id: 'transit', label: 'Transit Access', icon: Train, avg: reviews.reduce((sum, r) => sum + r.transit, 0) / reviews.length, color: 'text-indigo-600' },
-                    { id: 'amenities', label: 'Amenities', icon: Package, avg: reviews.reduce((sum, r) => sum + r.amenities, 0) / reviews.length, color: 'text-orange-600' },
-                  ].map((category) => {
-                    const Icon = category.icon
-                    const percentage = (category.avg / 5) * 100
-                    return (
-                      <div key={category.id} className="group bg-gray-50 rounded-lg p-3 border border-gray-200 hover:border-primary-300 transition-all">
-                        <div className="flex flex-col items-center text-center">
-                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center bg-gradient-to-br mb-2 ${
-                            category.color === 'text-green-600' ? 'from-green-400 to-green-500' :
-                            category.color === 'text-blue-600' ? 'from-blue-400 to-blue-500' :
-                            category.color === 'text-purple-600' ? 'from-purple-400 to-purple-500' :
-                            category.color === 'text-pink-600' ? 'from-pink-400 to-pink-500' :
-                            category.color === 'text-indigo-600' ? 'from-indigo-400 to-indigo-500' :
-                            'from-orange-400 to-orange-500'
-                          }`}>
-                            <Icon className="w-5 h-5 text-white" />
-                          </div>
-                          <span className="font-semibold text-gray-900 text-xs mb-1">{category.label}</span>
-                          <div className="text-2xl font-bold text-gray-900 mb-1">
-                            {category.avg.toFixed(1)}
-                          </div>
-                          <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden mb-1">
-                            <div
-                              className={`h-full rounded-full transition-all ${
-                                percentage >= 80 ? 'bg-green-500' :
-                                percentage >= 60 ? 'bg-blue-500' :
-                                percentage >= 40 ? 'bg-yellow-500' :
-                                'bg-red-500'
-                              }`}
-                              style={{ width: `${percentage}%` }}
-                            />
-                          </div>
-                          <span className={`text-xs font-medium ${
-                            percentage >= 80 ? 'text-green-600' :
-                            percentage >= 60 ? 'text-blue-600' :
-                            percentage >= 40 ? 'text-yellow-600' :
-                            'text-red-600'
-                          }`}>
-                            {percentage >= 80 && 'Excellent'}
-                            {percentage >= 60 && percentage < 80 && 'Good'}
-                            {percentage >= 40 && percentage < 60 && 'Average'}
-                            {percentage < 40 && 'Poor'}
-                          </span>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* All Images Gallery */}
+          {/* Image Thumbnails Gallery - Show if images exist */}
             {allImages.length > 1 && (
-              <div className="mb-8 bg-gray-50 rounded-xl p-6 border border-gray-200">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h2 className="text-lg font-bold text-gray-900">Community Photos</h2>
-                    <p className="text-sm text-gray-600">{allImages.length} photos from residents</p>
-                  </div>
+            <div className="px-6 lg:px-12 py-4 bg-gradient-to-br from-gray-50 to-white border-t border-gray-100">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-gray-700 flex items-center space-x-2">
+                  <Camera className="w-4 h-4" />
+                  <span>Community Photos ({allImages.length})</span>
+                </h3>
                   <button
                     onClick={() => {
                       setSelectedImageIndex(0)
                       setShowImageGallery(true)
                     }}
-                    className="bg-primary-500 text-white px-5 py-2 rounded-lg hover:bg-primary-600 transition-all font-medium text-sm shadow-md"
+                  className="text-xs text-primary-600 hover:text-primary-700 font-medium"
                   >
                     View All →
                   </button>
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                  {allImages.slice(0, 12).map((img, idx) => (
+              <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-2">
+                {allImages.slice(0, 10).map((img, idx) => (
                     <div
                       key={idx}
                       onClick={() => {
                         setSelectedImageIndex(idx)
                         setShowImageGallery(true)
                       }}
-                      className="relative h-36 rounded-xl overflow-hidden cursor-pointer hover:scale-105 transition-transform group shadow-md"
+                    className="relative aspect-square rounded-lg overflow-hidden cursor-pointer group hover:scale-105 transition-transform duration-200 shadow-md"
                     >
                       <img
                         src={img}
-                        alt={`${neighborhood.name} neighborhood photo ${idx + 1} - Real resident image from ${neighborhood.city}`}
+                      alt={`Photo ${idx + 1}`}
                         className="w-full h-full object-cover"
                       />
-                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all flex items-center justify-center">
-                        <span className="text-white opacity-0 group-hover:opacity-100 transition-opacity font-semibold">
-                          View
-                        </span>
-                      </div>
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
                     </div>
                   ))}
                 </div>
-                {allImages.length > 12 && (
+              {allImages.length > 10 && (
                   <button
                     onClick={() => {
-                      setSelectedImageIndex(0)
+                    setSelectedImageIndex(10)
                       setShowImageGallery(true)
                     }}
-                    className="mt-4 text-primary-600 hover:text-primary-700 font-medium"
+                  className="mt-3 text-sm text-gray-600 hover:text-primary-600 font-medium"
                   >
-                    + {allImages.length - 12} more photos
+                  + {allImages.length - 10} more photos
                   </button>
                 )}
               </div>
             )}
 
+          {/* Content - Side by Side Layout */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 p-6 lg:p-8 xl:p-12 bg-gradient-to-br from-gray-50 via-white to-gray-50">
+            {/* Left Side - Reviews */}
+            <div className="lg:col-span-2 space-y-6">
             {/* All User Reviews */}
             {reviews.length > 0 && (
               <div className="mb-12">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 gap-3">
-                  <div>
-                    <h2 className="text-xl font-bold text-gray-900 mb-1">Reviews ({reviews.length})</h2>
-                    <p className="text-sm text-gray-600">Sorted by most helpful • Real residents</p>
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-3">
+                  <div className="relative">
+                    <h2 className="text-4xl font-bold bg-gradient-to-r from-gray-900 via-blue-900 to-purple-900 bg-clip-text text-transparent mb-2">
+                      Reviews ({reviews.length})
+                    </h2>
+                    <p className="text-sm text-gray-600 flex items-center space-x-2">
+                      <span className="inline-block w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                      <span>Sorted by most helpful • Real residents</span>
+                    </p>
                   </div>
                   
                   {/* Rating Filter */}
+                  <div className="relative">
                   <select
                     value={ratingFilter || ''}
                     onChange={(e) => setRatingFilter(e.target.value ? parseInt(e.target.value) : null)}
-                    className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none text-sm font-medium bg-white shadow-sm"
+                      className="px-5 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm font-semibold bg-white shadow-lg hover:shadow-xl transition-all appearance-none cursor-pointer bg-gradient-to-br from-white to-gray-50"
                   >
-                    <option value="">All Ratings</option>
+                      <option value="">⭐ All Ratings</option>
                     <option value="5">⭐ 5 Stars</option>
                     <option value="4">⭐ 4 Stars</option>
                     <option value="3">⭐ 3 Stars</option>
                     <option value="2">⭐ 2 Stars</option>
                     <option value="1">⭐ 1 Star</option>
                   </select>
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                      <ChevronRight className="w-4 h-4 text-gray-400" />
+                    </div>
+                  </div>
                 </div>
 
                 <div className="space-y-4">
                   {reviews
                     .filter(review => {
                       if (!ratingFilter) return true
-                      const reviewAvg = Math.round((review.safety + review.cleanliness + review.noise + review.community + review.transit + review.amenities) / 6)
+                      const s = (review.safety || 0)
+                      const n = (review.noise || 0)
+                      const t = (review.transit || 0)
+                      const a = (review.amenities || 0)
+                      const c = (review.community || 0)
+                      const reviewAvg = Math.round((s + n + t + a + c) / 5)
                       return reviewAvg === ratingFilter
                     })
                     .sort((a, b) => {
-                      // Reddit-style algorithm: Sort by (upvotes - downvotes), then by date
                       const aScore = (a.helpful_count || 0) - (a.not_helpful_count || 0)
                       const bScore = (b.helpful_count || 0) - (b.not_helpful_count || 0)
                       if (aScore !== bScore) return bScore - aScore
                       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
                     })
                     .map((review, index) => {
-                    const reviewAvg = (review.safety + review.cleanliness + review.noise + review.community + review.transit + review.amenities) / 6
+                      const s = (review.safety || 0)
+                      const n = (review.noise || 0)
+                      const t = (review.transit || 0)
+                      const a = (review.amenities || 0)
+                      const c = (review.community || 0)
+                      const reviewAvg = (s + n + t + a + c) / 5
                     const displayName = review.is_anonymous ? 'Anonymous User' : (review.display_name || 'Anonymous User')
                     
                     return (
-                      <div key={review.id} className="bg-white rounded-lg p-4 border border-gray-200 hover:border-primary-200 hover:shadow-md transition-all">
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center space-x-2">
-                            <div className={`w-8 h-8 bg-gradient-to-br ${review.is_anonymous ? 'from-gray-400 to-gray-500' : 'from-primary-500 to-primary-600'} rounded-lg flex items-center justify-center`}>
-                              <User className="w-4 h-4 text-white" />
+                        <div key={review.id} className="group bg-white rounded-2xl p-6 border-2 border-gray-100 hover:border-blue-200 hover:shadow-2xl transition-all duration-300 relative overflow-hidden">
+                          {/* Gradient overlay on hover */}
+                          <div className="absolute inset-0 bg-gradient-to-br from-blue-50/0 to-purple-50/0 group-hover:from-blue-50/30 group-hover:to-purple-50/30 transition-all duration-300 -z-10"></div>
+                          
+                          <div className="flex items-start justify-between mb-4">
+                            <div className="flex items-center space-x-4">
+                              <div className={`relative w-14 h-14 bg-gradient-to-br ${review.is_anonymous ? 'from-gray-400 to-gray-500' : 'from-blue-500 via-purple-500 to-pink-500'} rounded-2xl flex items-center justify-center shadow-lg transform group-hover:scale-110 transition-transform`}>
+                                <User className="w-7 h-7 text-white" />
+                                {/* Decorative circle */}
+                                <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-400 rounded-full border-2 border-white animate-pulse"></div>
                             </div>
                             <div>
-                              <p className="font-semibold text-gray-900 text-sm">{displayName}</p>
-                              <p className="text-xs text-gray-500">
+                                <p className="font-bold text-gray-900 text-lg">{displayName}</p>
+                                <p className="text-xs text-gray-500 flex items-center space-x-2">
+                                  <Calendar className="w-3 h-3" />
+                                  <span>
                                 {new Date(review.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                              </p>
+                                  </span>
+                                </p>
+                              </div>
+                            </div>
+                            <div className="flex items-center space-x-2 bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 px-5 py-3 rounded-2xl shadow-xl relative overflow-hidden group-hover:scale-105 transition-transform">
+                              {/* Animated background */}
+                              <div className="absolute inset-0 bg-gradient-to-r from-yellow-400 via-pink-500 to-purple-500 opacity-0 group-hover:opacity-50 transition-opacity duration-300"></div>
+                              <Star className="w-6 h-6 text-white fill-white relative z-10" />
+                              <span className="font-bold text-white text-xl relative z-10">{reviewAvg.toFixed(1)}</span>
                             </div>
                           </div>
-                          <div className="flex items-center space-x-1.5 bg-gradient-to-r from-primary-500 to-primary-600 px-3 py-1.5 rounded-lg shadow-sm">
-                            <Star className="w-4 h-4 text-white fill-white" />
-                            <span className="font-bold text-white">{reviewAvg.toFixed(1)}</span>
+
+                          {/* Category Ratings */}
+                          {review.comment && (
+                            <p className="text-gray-700 mb-4 leading-relaxed text-base border-l-4 border-blue-500 pl-4 bg-blue-50/30 py-2 rounded-r-lg">{review.comment}</p>
+                          )}
+
+                          {/* Review Images */}
+                          {review.images && review.images.length > 0 && (
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
+                              {review.images.slice(0, 6).map((img, idx) => (
+                                <div
+                                  key={idx}
+                                  className="relative group/img overflow-hidden rounded-xl cursor-pointer transform hover:scale-105 transition-all duration-300 shadow-md hover:shadow-2xl"
+                                  onClick={() => window.open(img, '_blank')}
+                                >
+                                  <img
+                                    src={img}
+                                    alt={`Review image ${idx + 1}`}
+                                    className="w-full h-32 object-cover"
+                                  />
+                                  {/* Overlay on hover */}
+                                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover/img:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                                    <div className="text-white font-semibold text-sm transform translate-y-2 group-hover/img:translate-y-0 transition-transform">View Full Size</div>
                           </div>
                         </div>
+                              ))}
+                          </div>
+                          )}
 
-                        {/* Individual Category Ratings */}
-                        <div className="grid grid-cols-3 md:grid-cols-6 gap-2 mb-3">
-                          <div className="flex flex-col items-center bg-green-50 rounded-lg p-2">
-                            <Shield className="w-4 h-4 text-green-600 mb-1" />
-                            <span className="text-xs text-gray-600">Safety</span>
-                            <span className="font-bold text-sm text-gray-900">{review.safety}/5</span>
-                          </div>
-                          <div className="flex flex-col items-center bg-blue-50 rounded-lg p-2">
-                            <Sparkles className="w-4 h-4 text-blue-600 mb-1" />
-                            <span className="text-xs text-gray-600">Clean</span>
-                            <span className="font-bold text-sm text-gray-900">{review.cleanliness}/5</span>
-                          </div>
-                          <div className="flex flex-col items-center bg-purple-50 rounded-lg p-2">
-                            <Volume2 className="w-4 h-4 text-purple-600 mb-1" />
-                            <span className="text-xs text-gray-600">Noise</span>
-                            <span className="font-bold text-sm text-gray-900">{review.noise}/5</span>
-                          </div>
-                          <div className="flex flex-col items-center bg-pink-50 rounded-lg p-2">
-                            <Users className="w-4 h-4 text-pink-600 mb-1" />
-                            <span className="text-xs text-gray-600">Community</span>
-                            <span className="font-bold text-sm text-gray-900">{review.community}/5</span>
-                          </div>
-                          <div className="flex flex-col items-center bg-indigo-50 rounded-lg p-2">
-                            <Train className="w-4 h-4 text-indigo-600 mb-1" />
-                            <span className="text-xs text-gray-600">Transit</span>
-                            <span className="font-bold text-sm text-gray-900">{review.transit}/5</span>
-                          </div>
-                          <div className="flex flex-col items-center bg-orange-50 rounded-lg p-2">
-                            <Package className="w-4 h-4 text-orange-600 mb-1" />
-                            <span className="text-xs text-gray-600">Amenities</span>
-                            <span className="font-bold text-sm text-gray-900">{review.amenities}/5</span>
+                          {/* Helpful Buttons */}
+                          <div className="flex items-center space-x-3 pt-4 border-t-2 border-gray-100">
+                            <button 
+                              onClick={async () => {
+                                try {
+                                  const { data: { user } } = await supabase.auth.getUser()
+                                  if (!user) {
+                                    alert('Please login to vote')
+                                    return
+                                  }
+
+                                  // Check if user already voted
+                                  const { data: existingVote } = await supabase
+                                    .from('image_votes')
+                                    .select('vote_type')
+                                    .eq('review_id', review.id)
+                                    .eq('user_id', user.id)
+                                    .single()
+
+                                  let newHelpfulCount = review.helpful_count || 0
+                                  let newNotHelpfulCount = review.not_helpful_count || 0
+
+                                  if (existingVote) {
+                                    if (existingVote.vote_type === 'like') {
+                                      // Already liked, remove like
+                                      newHelpfulCount -= 1
+                                      await supabase
+                                        .from('image_votes')
+                                        .delete()
+                                        .eq('review_id', review.id)
+                                        .eq('user_id', user.id)
+                                    } else {
+                                      // Was disliked, change to like
+                                      newHelpfulCount += 1
+                                      newNotHelpfulCount -= 1
+                                      await supabase
+                                        .from('image_votes')
+                                        .update({ vote_type: 'like', updated_at: new Date().toISOString() })
+                                        .eq('review_id', review.id)
+                                        .eq('user_id', user.id)
+                                    }
+                                  } else {
+                                    // New like
+                                    newHelpfulCount += 1
+                                    await supabase
+                                      .from('image_votes')
+                                      .insert({
+                                        review_id: review.id,
+                                        image_url: '',
+                                        user_id: user.id,
+                                        vote_type: 'like'
+                                      })
+                                  }
+
+                                  // Update review counts
+                                  await supabase
+                                    .from('neighborhood_reviews')
+                                    .update({
+                                      helpful_count: newHelpfulCount,
+                                      not_helpful_count: newNotHelpfulCount
+                                    })
+                                    .eq('id', review.id)
+
+                                  // Refresh reviews
+                                  fetchNeighborhood(params.id as string)
+                                } catch (error) {
+                                  console.error('Error voting:', error)
+                                }
+                              }}
+                              className="group/vote flex items-center space-x-2 text-gray-700 hover:text-green-600 transition-all hover:bg-gradient-to-r hover:from-green-50 hover:to-emerald-50 px-4 py-2.5 rounded-xl font-semibold border-2 border-gray-100 hover:border-green-200 relative overflow-hidden"
+                            >
+                              {/* Animated background */}
+                              <div className="absolute inset-0 bg-gradient-to-r from-green-400 to-emerald-500 opacity-0 group-hover/vote:opacity-10 transition-opacity duration-300"></div>
+                              <ThumbsUp className="w-5 h-5 relative z-10 transform group-hover/vote:scale-110 transition-transform" />
+                              <span className="text-sm relative z-10">Helpful ({review.helpful_count || 0})</span>
+                            </button>
+                            <button 
+                              onClick={async () => {
+                                try {
+                                  const { data: { user } } = await supabase.auth.getUser()
+                                  if (!user) {
+                                    alert('Please login to vote')
+                                    return
+                                  }
+
+                                  const { data: existingVote } = await supabase
+                                    .from('image_votes')
+                                    .select('vote_type')
+                                    .eq('review_id', review.id)
+                                    .eq('user_id', user.id)
+                                    .single()
+
+                                  let newHelpfulCount = review.helpful_count || 0
+                                  let newNotHelpfulCount = review.not_helpful_count || 0
+
+                                  if (existingVote) {
+                                    if (existingVote.vote_type === 'dislike') {
+                                      newNotHelpfulCount -= 1
+                                      await supabase
+                                        .from('image_votes')
+                                        .delete()
+                                        .eq('review_id', review.id)
+                                        .eq('user_id', user.id)
+                                    } else {
+                                      newNotHelpfulCount += 1
+                                      newHelpfulCount -= 1
+                                      await supabase
+                                        .from('image_votes')
+                                        .update({ vote_type: 'dislike', updated_at: new Date().toISOString() })
+                                        .eq('review_id', review.id)
+                                        .eq('user_id', user.id)
+                                    }
+                                  } else {
+                                    newNotHelpfulCount += 1
+                                    await supabase
+                                      .from('image_votes')
+                                      .insert({
+                                        review_id: review.id,
+                                        image_url: '',
+                                        user_id: user.id,
+                                        vote_type: 'dislike'
+                                      })
+                                  }
+
+                                  await supabase
+                                    .from('neighborhood_reviews')
+                                    .update({
+                                      helpful_count: newHelpfulCount,
+                                      not_helpful_count: newNotHelpfulCount
+                                    })
+                                    .eq('id', review.id)
+
+                                  fetchNeighborhood(params.id as string)
+                                } catch (error) {
+                                  console.error('Error voting:', error)
+                                }
+                              }}
+                              className="group/vote group/vote2 flex items-center space-x-2 text-gray-700 hover:text-red-600 transition-all hover:bg-gradient-to-r hover:from-red-50 hover:to-rose-50 px-4 py-2.5 rounded-xl font-semibold border-2 border-gray-100 hover:border-red-200 relative overflow-hidden"
+                            >
+                              {/* Animated background */}
+                              <div className="absolute inset-0 bg-gradient-to-r from-red-400 to-rose-500 opacity-0 group-hover/vote2:opacity-10 transition-opacity duration-300"></div>
+                              <ThumbsDown className="w-5 h-5 relative z-10 transform group-hover/vote2:scale-110 transition-transform" />
+                              <span className="text-sm relative z-10">Not helpful ({review.not_helpful_count || 0})</span>
+                            </button>
                           </div>
                         </div>
-
-                        {/* Comment */}
-                        {review.comment && (
-                          <div className="bg-gray-50 rounded-lg p-4 mt-3 border border-gray-200">
-                            <div className="flex items-start space-x-2">
-                              <MessageCircle className="w-4 h-4 text-gray-400 flex-shrink-0 mt-0.5" />
-                              <p className="text-gray-700 text-sm leading-relaxed">{review.comment}</p>
+                      )
+                    })}
                             </div>
                           </div>
                         )}
+            </div>
 
-                        {/* Like/Dislike Voting */}
-                        <div className="mt-4 pt-4 border-t border-gray-100">
-                          <ReviewVoting
-                            reviewId={review.id}
-                            reviewType="neighborhood"
-                            helpfulCount={review.helpful_count || 0}
-                            notHelpfulCount={review.not_helpful_count || 0}
-                          />
+            {/* Right Sidebar - Neighborhood Info */}
+            <div className="lg:col-span-1">
+              <div className="sticky top-4 space-y-6">
+                {/* Neighborhood Card */}
+                <div className="bg-gradient-to-br from-blue-500 to-indigo-600 rounded-2xl p-8 shadow-xl text-white">
+                  <h2 className="text-2xl font-bold mb-2">{neighborhood.name}</h2>
+                  <p className="text-blue-100 mb-6">{neighborhood.city}, {neighborhood.province}</p>
+                  
+                  <div className="flex items-center justify-between mb-6 pb-6 border-b border-blue-400/30">
+                    <div className="text-center w-full">
+                      <div className="flex items-center justify-center space-x-2 mb-2">
+                        <Star className="w-6 h-6 text-yellow-400 fill-yellow-400" />
+                        <span className="text-4xl font-bold">
+                          {(neighborhood.overall_rating || neighborhood.average_rating) > 0 
+                            ? (neighborhood.overall_rating || neighborhood.average_rating || 0).toFixed(1) 
+                            : 'N/A'}
+                        </span>
+                      </div>
+                      <div className="text-sm text-blue-100">{neighborhood.total_reviews || 0} Reviews</div>
+                    </div>
                         </div>
 
-                        {/* Review Photos */}
-                        {review.images && review.images.length > 0 && (
-                          <div className="mt-3">
-                            <div className="flex items-center space-x-2 mb-2">
-                              <Camera className="w-4 h-4 text-gray-500" />
-                              <span className="text-xs text-gray-600 font-medium">{review.images.length} {review.images.length === 1 ? 'Photo' : 'Photos'}</span>
-                            </div>
-                            <div className="grid grid-cols-4 md:grid-cols-6 gap-2">
-                              {review.images.map((img, imgIndex) => (
-                                <img
-                                  key={imgIndex}
+                  {/* Photos Gallery */}
+                  {allImages.length > 0 && (
+                    <div className="mb-6">
+                      <p className="text-sm text-blue-100 mb-3 font-semibold">Community Photos</p>
+                      <div className="grid grid-cols-3 gap-2">
+                        {allImages.slice(0, 6).map((img, idx) => (
+                          <img
+                            key={idx}
                                   src={img}
-                                  alt={`${neighborhood.name} review photo ${imgIndex + 1} from ${displayName}`}
-                                  className="w-full h-16 object-cover rounded-lg cursor-pointer hover:opacity-75 transition-opacity shadow-sm"
+                            alt={`Photo ${idx + 1}`}
+                            className="w-full h-20 object-cover rounded-lg cursor-pointer hover:opacity-80 transition-opacity border-2 border-white/30"
                                   onClick={() => {
-                                    const imageIndexInAll = allImages.indexOf(img)
-                                    if (imageIndexInAll !== -1) {
-                                      setSelectedImageIndex(imageIndexInAll)
+                              setSelectedImageIndex(idx)
                                       setShowImageGallery(true)
-                                    }
                                   }}
                                 />
                               ))}
                             </div>
+                      {allImages.length > 6 && (
+                        <button
+                          onClick={() => {
+                            setSelectedImageIndex(0)
+                            setShowImageGallery(true)
+                          }}
+                          className="mt-2 text-xs text-white/80 hover:text-white text-center w-full"
+                        >
+                          View all {allImages.length} photos
+                        </button>
+                      )}
                           </div>
                         )}
+
+                  {/* Category Ratings */}
+                  {reviews.length > 0 && (
+                    <div className="mb-6">
+                      <p className="text-sm text-blue-100 mb-3 font-semibold">Category Ratings</p>
+                      <div className="space-y-3">
+                        {[
+                          { label: 'Safety', avg: neighborhood.safety_rating || reviews.reduce((sum, r) => sum + (r.safety || 0), 0) / reviews.length },
+                          { label: 'Noise', avg: neighborhood.noise_rating || reviews.reduce((sum, r) => sum + (r.noise || 0), 0) / reviews.length },
+                          { label: 'Transit', avg: neighborhood.transit_rating || reviews.reduce((sum, r) => sum + (r.transit || 0), 0) / reviews.length },
+                          { label: 'Amenities', avg: neighborhood.amenities_rating || reviews.reduce((sum, r) => sum + (r.amenities || 0), 0) / reviews.length },
+                          { label: 'Community', avg: neighborhood.community_rating || reviews.reduce((sum, r) => sum + (r.community || 0), 0) / reviews.length },
+                        ].map((cat) => {
+                          const percentage = (cat.avg / 5) * 100
+                          return (
+                            <div key={cat.label} className="bg-white/10 rounded-lg p-2 backdrop-blur-sm">
+                              <div className="flex justify-between items-center mb-1">
+                                <span className="text-xs text-blue-100">{cat.label}</span>
+                                <span className="text-xs font-bold text-white">{cat.avg.toFixed(1)}</span>
+                              </div>
+                              <div className="w-full h-1.5 bg-white/20 rounded-full overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full ${
+                                    percentage >= 80 ? 'bg-green-400' :
+                                    percentage >= 60 ? 'bg-blue-400' :
+                                    percentage >= 40 ? 'bg-yellow-400' :
+                                    'bg-red-400'
+                                  }`}
+                                  style={{ width: `${percentage}%` }}
+                                />
+                              </div>
                       </div>
                     )
                   })}
@@ -586,43 +694,101 @@ export default function NeighborhoodDetail() {
               </div>
             )}
 
+                  {/* Rate Button */}
+                  <Link
+                    href={`/rate/neighborhood?prefill=${encodeURIComponent(JSON.stringify({
+                      name: neighborhood.name,
+                      city: neighborhood.city,
+                      province: neighborhood.province,
+                      latitude: neighborhood.latitude,
+                      longitude: neighborhood.longitude
+                    }))}`}
+                    className="block w-full bg-white text-blue-600 py-3 rounded-xl hover:bg-blue-50 transition-all font-bold text-center shadow-lg"
+                  >
+                    Rate This Neighborhood
+                  </Link>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
         {/* Image Gallery Modal */}
-        {showImageGallery && allImages.length > 0 && (
-          <div className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center">
+        {showImageGallery && (
+          <div className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center p-4 animate-fade-in" onClick={() => setShowImageGallery(false)}>
+            {/* Close Button */}
             <button
-              onClick={() => setShowImageGallery(false)}
-              className="absolute top-4 right-4 text-white hover:text-gray-300 p-2"
+              className="absolute top-4 right-4 text-white hover:bg-white/20 rounded-full p-2 transition-all z-20 backdrop-blur-sm"
+              onClick={(e) => {
+                e.stopPropagation()
+                setShowImageGallery(false)
+              }}
             >
-              <X className="w-8 h-8" />
+              <X className="w-6 h-6" />
             </button>
 
-            <button
-              onClick={() => setSelectedImageIndex(prev => prev === 0 ? allImages.length - 1 : prev - 1)}
-              className="absolute left-4 text-white hover:text-gray-300 p-2"
-            >
-              <ChevronLeft className="w-12 h-12" />
-            </button>
-
-            <div className="max-w-6xl max-h-screen p-4">
+            {/* Main Image */}
+            <div className="max-w-6xl w-full relative" onClick={(e) => e.stopPropagation()}>
               <img
                 src={allImages[selectedImageIndex]}
                 alt={`Photo ${selectedImageIndex + 1}`}
-                className="max-w-full max-h-[90vh] object-contain"
+                className="w-full h-auto max-h-[90vh] object-contain rounded-lg shadow-2xl"
               />
-              <div className="text-center mt-4 text-white">
-                <p className="text-sm">{selectedImageIndex + 1} / {allImages.length}</p>
-              </div>
+              
+              {/* Navigation Controls */}
+              {allImages.length > 1 && (
+                <>
+                  {/* Previous Button */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setSelectedImageIndex((prev) => (prev === 0 ? allImages.length - 1 : prev - 1))
+                    }}
+                    className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-gray-900 p-3 rounded-full transition-all shadow-lg z-10"
+                  >
+                    <ChevronLeft className="w-6 h-6" />
+                  </button>
+
+                  {/* Next Button */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setSelectedImageIndex((prev) => (prev === allImages.length - 1 ? 0 : prev + 1))
+                    }}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-gray-900 p-3 rounded-full transition-all shadow-lg z-10"
+                  >
+                    <ChevronRight className="w-6 h-6" />
+                  </button>
+
+                  {/* Image Counter */}
+                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/80 backdrop-blur-md text-white px-4 py-2 rounded-full text-sm font-medium">
+                    {selectedImageIndex + 1} / {allImages.length}
             </div>
 
+                  {/* Thumbnail Strip */}
+                  {allImages.length <= 10 && (
+                    <div className="flex items-center justify-center gap-2 mt-4 overflow-x-auto px-4">
+                      {allImages.map((img, idx) => (
             <button
-              onClick={() => setSelectedImageIndex(prev => (prev + 1) % allImages.length)}
-              className="absolute right-4 text-white hover:text-gray-300 p-2"
-            >
-              <ChevronRight className="w-12 h-12" />
+                          key={idx}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setSelectedImageIndex(idx)
+                          }}
+                          className={`flex-shrink-0 w-16 h-16 rounded-lg overflow-hidden border-2 transition-all ${
+                            idx === selectedImageIndex
+                              ? 'border-white scale-110 shadow-lg'
+                              : 'border-transparent opacity-60 hover:opacity-100'
+                          }`}
+                        >
+                          <img src={img} alt={`Thumb ${idx + 1}`} className="w-full h-full object-cover" />
             </button>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
           </div>
         )}
       </div>

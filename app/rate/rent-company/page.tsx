@@ -70,6 +70,21 @@ export default function RateRentCompany() {
     setImagePreviews(newPreviews)
   }
 
+  const withTimeout = async <T,>(promise: Promise<T>, timeoutMs = 15000): Promise<T> => {
+    let timeout: NodeJS.Timeout
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeout = setTimeout(() => {
+        reject(new Error('Request timed out. Please check your connection and try again.'))
+      }, timeoutMs)
+    })
+
+    try {
+      return await Promise.race([promise, timeoutPromise])
+    } finally {
+      clearTimeout(timeout!)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!user) return
@@ -86,9 +101,12 @@ export default function RateRentCompany() {
           const fileName = `${user.id}-${Date.now()}-${i}.${fileExt}`
           const filePath = `rent-company-reviews/${fileName}`
 
-          const { error: uploadError } = await supabase.storage
-            .from('reviews')
-            .upload(filePath, file)
+          const { error: uploadError } = await withTimeout(
+            supabase.storage
+              .from('review-images')
+              .upload(filePath, file),
+            20000
+          )
 
           if (uploadError) {
             console.error('Upload error:', uploadError)
@@ -96,7 +114,7 @@ export default function RateRentCompany() {
           }
 
           const { data: { publicUrl } } = supabase.storage
-            .from('reviews')
+            .from('review-images')
             .getPublicUrl(filePath)
 
           imageUrls.push(publicUrl)
@@ -104,7 +122,7 @@ export default function RateRentCompany() {
       }
 
       // Check if rent company already exists
-      const { data: existingCompany } = await supabase
+      const existingCompanyRequest = supabase
         .from('rent_companies')
         .select('id')
         .eq('name', name)
@@ -112,13 +130,15 @@ export default function RateRentCompany() {
         .eq('province', province)
         .single()
 
+      const { data: existingCompany } = await withTimeout(existingCompanyRequest, 10000)
+
       let companyId: string
 
       if (existingCompany) {
         companyId = existingCompany.id
       } else {
         // Create new rent company
-        const { data: newCompany, error: companyError } = await supabase
+        const insertCompanyRequest = supabase
           .from('rent_companies')
           .insert({
             name,
@@ -132,6 +152,8 @@ export default function RateRentCompany() {
           .select('id')
           .single()
 
+        const { data: newCompany, error: companyError } = await withTimeout(insertCompanyRequest, 10000)
+
         if (companyError) {
           console.error('Company creation error:', companyError)
           throw companyError
@@ -141,69 +163,15 @@ export default function RateRentCompany() {
       }
 
       // Check if user already reviewed this company
-      const { data: existingReview } = await supabase
+      const reviewCheckRequest = supabase
         .from('rent_company_reviews')
         .select('id')
         .eq('rent_company_id', companyId)
         .eq('user_id', user.id)
         .single()
 
-      if (existingReview) {
-        // Update existing review
-        const { error: updateError } = await supabase
-          .from('rent_company_reviews')
-          .update({
-            title: comment ? comment.substring(0, 100) : null,
-            review: comment,
-            pros: null,
-            cons: null,
-            overall_rating: ratings.find(r => r.id === 'service')?.value || 0,
-            service_rating: ratings.find(r => r.id === 'service')?.value || 0,
-            pricing_rating: ratings.find(r => r.id === 'pricing')?.value || 0,
-            communication_rating: ratings.find(r => r.id === 'communication')?.value || 0,
-            reliability_rating: ratings.find(r => r.id === 'reliability')?.value || 0,
-            professionalism_rating: ratings.find(r => r.id === 'professionalism')?.value || 0,
-            years_used: yearsUsed || null,
-            would_recommend: wouldRecommend,
-            is_anonymous: isAnonymous,
-            display_name: !isAnonymous ? displayName : null,
-          })
-          .eq('id', existingReview.id)
+      const { data: existingReview } = await withTimeout(reviewCheckRequest, 10000)
 
-        if (updateError) {
-          console.error('Update error:', updateError)
-          throw updateError
-        }
-      } else {
-        // Create new review
-        const { error: insertError } = await supabase
-          .from('rent_company_reviews')
-          .insert({
-            rent_company_id: companyId,
-            user_id: user.id,
-            title: comment ? comment.substring(0, 100) : null,
-            review: comment,
-            pros: null,
-            cons: null,
-            overall_rating: ratings.find(r => r.id === 'service')?.value || 0,
-            service_rating: ratings.find(r => r.id === 'service')?.value || 0,
-            pricing_rating: ratings.find(r => r.id === 'pricing')?.value || 0,
-            communication_rating: ratings.find(r => r.id === 'communication')?.value || 0,
-            reliability_rating: ratings.find(r => r.id === 'reliability')?.value || 0,
-            professionalism_rating: ratings.find(r => r.id === 'professionalism')?.value || 0,
-            years_used: yearsUsed || null,
-            would_recommend: wouldRecommend,
-            is_anonymous: isAnonymous,
-            display_name: !isAnonymous ? displayName : null,
-          })
-
-        if (insertError) {
-          console.error('Insert error:', insertError)
-          throw insertError
-        }
-      }
-
-      // Calculate average rating to determine if it needs approval
       const avgRating = (
         (ratings.find(r => r.id === 'service')?.value || 0) +
         (ratings.find(r => r.id === 'pricing')?.value || 0) +
@@ -212,17 +180,80 @@ export default function RateRentCompany() {
         (ratings.find(r => r.id === 'professionalism')?.value || 0)
       ) / 5
 
+      if (existingReview) {
+        // Update existing review
+        const updateReviewRequest = supabase
+          .from('rent_company_reviews')
+          .update({
+            title: comment ? comment.substring(0, 100) : null,
+            review_text: comment,
+            overall_rating: avgRating,
+            service_rating: ratings.find(r => r.id === 'service')?.value || 0,
+            pricing_rating: ratings.find(r => r.id === 'pricing')?.value || 0,
+            communication_rating: ratings.find(r => r.id === 'communication')?.value || 0,
+            reliability_rating: ratings.find(r => r.id === 'reliability')?.value || 0,
+            professionalism_rating: ratings.find(r => r.id === 'professionalism')?.value || 0,
+            years_used: yearsUsed || null,
+            would_recommend: wouldRecommend,
+            is_anonymous: isAnonymous,
+            display_name: !isAnonymous ? displayName : null,
+            images: imageUrls.length > 0 ? imageUrls : null,
+            status: avgRating >= 3 ? 'approved' : 'pending',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existingReview.id)
+
+        const { error: updateError } = await withTimeout(updateReviewRequest, 10000)
+
+        if (updateError) {
+          console.error('Update error:', updateError)
+          throw updateError
+        }
+      } else {
+        // Create new review
+        const insertReviewRequest = supabase
+          .from('rent_company_reviews')
+          .insert({
+            rent_company_id: companyId,
+            user_id: user.id,
+            title: comment ? comment.substring(0, 100) : null,
+            review_text: comment,
+            overall_rating: avgRating,
+            service_rating: ratings.find(r => r.id === 'service')?.value || 0,
+            pricing_rating: ratings.find(r => r.id === 'pricing')?.value || 0,
+            communication_rating: ratings.find(r => r.id === 'communication')?.value || 0,
+            reliability_rating: ratings.find(r => r.id === 'reliability')?.value || 0,
+            professionalism_rating: ratings.find(r => r.id === 'professionalism')?.value || 0,
+            years_used: yearsUsed || null,
+            would_recommend: wouldRecommend,
+            is_anonymous: isAnonymous,
+            display_name: !isAnonymous ? displayName : null,
+            images: imageUrls.length > 0 ? imageUrls : null,
+            status: avgRating >= 3 ? 'approved' : 'pending',
+          })
+
+        const { error: insertError } = await withTimeout(insertReviewRequest, 10000)
+
+        if (insertError) {
+          console.error('Insert error:', insertError)
+          throw insertError
+        }
+      }
+
       // Show appropriate success message
       if (avgRating >= 3) {
         alert('✅ Rent Company Rating Submitted Successfully!\n\n🎉 Your review has been APPROVED and is now LIVE!\n\nOther users can now see your review.\n\nThank you for contributing!')
+        setLoading(false)
+        router.push('/explore?success=approved')
       } else {
         alert('✅ Rent Company Rating Submitted Successfully!\n\n⏳ Your review is under admin review.\n\nWhy? Reviews with 2 stars or less need admin approval to prevent abuse.\n\nYou will be notified once approved.\n\nThank you for your honest feedback!')
+        setLoading(false)
+        router.push('/explore?success=pending')
       }
-      
-      router.push('/explore?success=true')
     } catch (error: any) {
       console.error('❌ Error submitting rating:', error)
       alert('Error submitting rating:\n\n' + (error.message || error.toString() || 'Unknown error') + '\n\nCheck browser console for details.')
+    } finally {
       setLoading(false)
     }
   }

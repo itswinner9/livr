@@ -4,8 +4,8 @@ import { useState, useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { 
-  Shield, Users, Star, MapPin, Building2, Image as ImageIcon, 
-  Settings, Home, LogOut, Menu, X, Clock, CheckCircle, AlertCircle 
+  Shield, Users, Star, MapPin, Building2, Building, Image as ImageIcon, 
+  Settings, Home, LogOut, Menu, X, Clock, CheckCircle, AlertCircle, UserCheck, BookOpen, BadgeCheck
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 
@@ -89,7 +89,22 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       .select('id')
       .eq('status', 'pending')
 
-    setPendingCount((nReviews?.length || 0) + (bReviews?.length || 0))
+    const { data: lReviews } = await supabase
+      .from('landlord_reviews')
+      .select('id')
+      .eq('status', 'pending')
+
+    const { data: rReviews } = await supabase
+      .from('rent_company_reviews')
+      .select('id')
+      .eq('status', 'pending')
+
+    setPendingCount(
+      (nReviews?.length || 0) + 
+      (bReviews?.length || 0) + 
+      (lReviews?.length || 0) + 
+      (rReviews?.length || 0)
+    )
   }
 
   const handleSignOut = async () => {
@@ -99,8 +114,35 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-primary-500"></div>
+      <div className="min-h-screen bg-gray-50 flex">
+        {/* Sidebar skeleton */}
+        <aside className="w-64 bg-white border-r border-gray-200 flex-shrink-0">
+          <div className="p-6 border-b border-gray-200 animate-pulse">
+            <div className="flex items-center space-x-2">
+              <div className="w-10 h-10 bg-gray-200 rounded-xl"></div>
+              <div>
+                <div className="h-4 bg-gray-200 rounded-lg w-24 mb-2"></div>
+                <div className="h-3 bg-gray-200 rounded-lg w-32"></div>
+              </div>
+            </div>
+          </div>
+          <nav className="p-4 space-y-2">
+            {[1, 2, 3, 4, 5, 6, 7].map((i) => (
+              <div key={i} className="h-12 bg-gray-100 rounded-xl animate-pulse" style={{ animationDelay: `${i * 50}ms` }}></div>
+            ))}
+          </nav>
+        </aside>
+        {/* Main content skeleton */}
+        <main className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="relative">
+              <div className="w-16 h-16 border-4 border-primary-100 rounded-full"></div>
+              <div className="w-16 h-16 border-4 border-transparent border-t-primary-500 rounded-full animate-spin absolute top-0 left-0"></div>
+            </div>
+            <p className="text-gray-600 mt-4 font-medium">Loading admin panel...</p>
+            <p className="text-gray-400 text-sm mt-2">Verifying access...</p>
+          </div>
+        </main>
       </div>
     )
   }
@@ -110,9 +152,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const menuItems = [
     { href: '/admin', icon: Shield, label: 'Dashboard', badge: null },
     { href: '/admin/pending', icon: Clock, label: 'Pending Reviews', badge: pendingCount > 0 ? pendingCount : null },
+    { href: '/admin/verifications', icon: BadgeCheck, label: 'Verifications', badge: null },
     { href: '/admin/reviews', icon: CheckCircle, label: 'Review Management', badge: null },
     { href: '/admin/all-reviews', icon: Star, label: 'All Reviews', badge: null },
+    { href: '/admin/blogs', icon: BookOpen, label: 'Blogs', badge: null },
     { href: '/admin/users', icon: Users, label: 'Users', badge: null },
+    { href: '/admin/landlords', icon: Users, label: 'Landlords', badge: null },
+    { href: '/admin/companies', icon: Building2, label: 'Companies', badge: null },
     { href: '/admin/neighborhoods', icon: MapPin, label: 'Neighborhoods', badge: null },
     { href: '/admin/buildings', icon: Building2, label: 'Buildings', badge: null },
     { href: '/admin/settings', icon: Settings, label: 'Settings', badge: null },

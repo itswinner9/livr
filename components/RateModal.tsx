@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { X, MapPin, Building2, Shield, Users, Star, Sparkles } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { X, MapPin, Building2, Building, Shield, Users, Star, Sparkles, UserCheck, MessageSquare } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
@@ -14,13 +14,13 @@ export default function RateModal({ onClose }: RateModalProps) {
   const router = useRouter()
 
   // Check authentication on mount
-  useState(() => {
+  useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setIsAuthenticated(!!session)
     })
-  })
+  }, [])
 
-  const handleChoice = (type: 'neighborhood' | 'building') => {
+  const handleChoice = (type: 'neighborhood' | 'building' | 'landlord' | 'rent-company') => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) {
         router.push(`/login?redirect=/rate/${type}`)
@@ -33,58 +33,45 @@ export default function RateModal({ onClose }: RateModalProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fade-in px-4">
-      <div className="bg-white rounded-3xl shadow-2xl max-w-3xl w-full animate-scale-in overflow-hidden">
-        {/* Header */}
-        <div className="relative bg-gradient-to-r from-primary-500 to-primary-600 p-8 text-white">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full animate-scale-in overflow-hidden border border-gray-100">
+        {/* Compact Header */}
+        <div className="relative bg-gradient-to-r from-blue-600 to-purple-600 px-6 py-5 text-white">
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 text-white/80 hover:text-white transition-colors p-2 hover:bg-white/10 rounded-lg"
+            className="absolute top-3 right-3 text-white/80 hover:text-white transition-colors p-1.5 hover:bg-white/10 rounded-lg"
           >
-            <X className="w-6 h-6" />
+            <X className="w-5 h-5" />
           </button>
-          <div className="text-center">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-white/20 backdrop-blur-md rounded-full mb-4">
-              <Star className="w-8 h-8 text-white fill-white" />
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center">
+              <Star className="w-5 h-5 text-white fill-white" />
             </div>
-            <h2 className="text-3xl font-bold mb-2">What would you like to rate?</h2>
-            <p className="text-primary-100">Share your experience and help others make better decisions</p>
+            <div>
+              <h2 className="text-lg font-bold">What would you like to rate?</h2>
+              <p className="text-xs text-white/90">Share your experience and help others</p>
+            </div>
           </div>
         </div>
 
-        <div className="p-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="p-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {/* Neighborhood Option */}
             <button
               onClick={() => handleChoice('neighborhood')}
-              className="group relative bg-white rounded-2xl p-8 text-left hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 border-2 border-gray-200 hover:border-primary-500 overflow-hidden"
+              className="group relative bg-white rounded-xl p-4 text-left hover:shadow-lg transition-all duration-200 hover:-translate-y-1 border border-gray-200 hover:border-blue-500 overflow-hidden"
             >
-              <div className="absolute top-0 right-0 w-32 h-32 bg-primary-50 rounded-full -translate-y-16 translate-x-16 group-hover:scale-150 transition-transform duration-500"></div>
-              
               <div className="relative">
-                <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-primary-500 to-primary-600 rounded-2xl shadow-lg mb-6 group-hover:scale-110 transition-transform">
-                  <MapPin className="w-8 h-8 text-white" />
+                <div className="inline-flex items-center justify-center w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow-md mb-3 group-hover:scale-105 transition-transform">
+                  <MapPin className="w-6 h-6 text-white" />
                 </div>
                 
-                <h3 className="text-2xl font-bold text-gray-900 mb-3">Neighborhood</h3>
+                <h3 className="text-base font-bold text-gray-900 mb-1">Neighborhood</h3>
                 
-                <div className="space-y-2 mb-6">
-                  <div className="flex items-center space-x-2 text-sm text-gray-600">
-                    <Shield className="w-4 h-4 text-green-600" />
-                    <span>Safety & Security</span>
-                  </div>
-                  <div className="flex items-center space-x-2 text-sm text-gray-600">
-                    <Sparkles className="w-4 h-4 text-blue-600" />
-                    <span>Cleanliness & Upkeep</span>
-                  </div>
-                  <div className="flex items-center space-x-2 text-sm text-gray-600">
-                    <Users className="w-4 h-4 text-pink-600" />
-                    <span>Community & Transit</span>
-                  </div>
-                </div>
+                <p className="text-xs text-gray-600 mb-2 line-clamp-2">Safety, cleanliness & transit</p>
                 
-                <div className="flex items-center justify-between text-primary-600 font-bold group-hover:text-primary-700">
-                  <span>Rate a Neighborhood</span>
-                  <span className="group-hover:translate-x-2 transition-transform">→</span>
+                <div className="text-blue-600 font-semibold text-xs group-hover:text-blue-700 flex items-center">
+                  <span>Rate Now</span>
+                  <span className="ml-1 group-hover:translate-x-1 transition-transform">→</span>
                 </div>
               </div>
             </button>
@@ -92,35 +79,62 @@ export default function RateModal({ onClose }: RateModalProps) {
             {/* Building Option */}
             <button
               onClick={() => handleChoice('building')}
-              className="group relative bg-white rounded-2xl p-8 text-left hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 border-2 border-gray-200 hover:border-gray-400 overflow-hidden"
+              className="group relative bg-white rounded-xl p-4 text-left hover:shadow-lg transition-all duration-200 hover:-translate-y-1 border border-gray-200 hover:border-green-500 overflow-hidden"
             >
-              <div className="absolute top-0 right-0 w-32 h-32 bg-gray-100 rounded-full -translate-y-16 translate-x-16 group-hover:scale-150 transition-transform duration-500"></div>
-              
               <div className="relative">
-                <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-gray-600 to-gray-700 rounded-2xl shadow-lg mb-6 group-hover:scale-110 transition-transform">
-                  <Building2 className="w-8 h-8 text-white" />
+                <div className="inline-flex items-center justify-center w-12 h-12 bg-gradient-to-br from-green-500 to-green-600 rounded-lg shadow-md mb-3 group-hover:scale-105 transition-transform">
+                  <Building2 className="w-6 h-6 text-white" />
                 </div>
                 
-                <h3 className="text-2xl font-bold text-gray-900 mb-3">Apartment/Building</h3>
+                <h3 className="text-base font-bold text-gray-900 mb-1">Building</h3>
                 
-                <div className="space-y-2 mb-6">
-                  <div className="flex items-center space-x-2 text-sm text-gray-600">
-                    <Users className="w-4 h-4 text-indigo-600" />
-                    <span>Management & Staff</span>
-                  </div>
-                  <div className="flex items-center space-x-2 text-sm text-gray-600">
-                    <Sparkles className="w-4 h-4 text-blue-600" />
-                    <span>Maintenance & Cleanliness</span>
-                  </div>
-                  <div className="flex items-center space-x-2 text-sm text-gray-600">
-                    <Star className="w-4 h-4 text-yellow-600" />
-                    <span>Value & Amenities</span>
-                  </div>
+                <p className="text-xs text-gray-600 mb-2 line-clamp-2">Management, maintenance & value</p>
+                
+                <div className="text-green-600 font-semibold text-xs group-hover:text-green-700 flex items-center">
+                  <span>Rate Now</span>
+                  <span className="ml-1 group-hover:translate-x-1 transition-transform">→</span>
+                </div>
+              </div>
+            </button>
+
+            {/* Landlord Option */}
+            <button
+              onClick={() => handleChoice('landlord')}
+              className="group relative bg-white rounded-xl p-4 text-left hover:shadow-lg transition-all duration-200 hover:-translate-y-1 border border-gray-200 hover:border-purple-500 overflow-hidden"
+            >
+              <div className="relative">
+                <div className="inline-flex items-center justify-center w-12 h-12 bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg shadow-md mb-3 group-hover:scale-105 transition-transform">
+                  <UserCheck className="w-6 h-6 text-white" />
                 </div>
                 
-                <div className="flex items-center justify-between text-gray-700 font-bold group-hover:text-gray-900">
-                  <span>Rate a Building</span>
-                  <span className="group-hover:translate-x-2 transition-transform">→</span>
+                <h3 className="text-base font-bold text-gray-900 mb-1">Landlord</h3>
+                
+                <p className="text-xs text-gray-600 mb-2 line-clamp-2">Responsiveness & communication</p>
+                
+                <div className="text-purple-600 font-semibold text-xs group-hover:text-purple-700 flex items-center">
+                  <span>Rate Now</span>
+                  <span className="ml-1 group-hover:translate-x-1 transition-transform">→</span>
+                </div>
+              </div>
+            </button>
+
+            {/* Rent Company Option */}
+            <button
+              onClick={() => handleChoice('rent-company')}
+              className="group relative bg-white rounded-xl p-4 text-left hover:shadow-lg transition-all duration-200 hover:-translate-y-1 border border-gray-200 hover:border-orange-500 overflow-hidden"
+            >
+              <div className="relative">
+                <div className="inline-flex items-center justify-center w-12 h-12 bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg shadow-md mb-3 group-hover:scale-105 transition-transform">
+                  <Building className="w-6 h-6 text-white" />
+                </div>
+                
+                <h3 className="text-base font-bold text-gray-900 mb-1">Rent Company</h3>
+                
+                <p className="text-xs text-gray-600 mb-2 line-clamp-2">Service quality & reliability</p>
+                
+                <div className="text-orange-600 font-semibold text-xs group-hover:text-orange-700 flex items-center">
+                  <span>Rate Now</span>
+                  <span className="ml-1 group-hover:translate-x-1 transition-transform">→</span>
                 </div>
               </div>
             </button>

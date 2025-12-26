@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { 
   User, Mail, Calendar, Star, MapPin, Building2, Edit, Trash2, 
-  Eye, Shield, Award, TrendingUp, Lock, LogOut, AlertCircle
+  Eye, Shield, Award, TrendingUp, Lock, LogOut, AlertCircle, Ban, Clock, AlertTriangle
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
@@ -25,100 +25,97 @@ export default function ProfilePage() {
   }, [])
 
   const checkUser = async () => {
-    const { data: { session } } = await supabase.auth.getSession()
-    
-    if (!session) {
-      router.push('/login')
-      return
-    }
+    try {
+      setLoading(true)
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (!session) {
+        router.push('/login')
+        return
+      }
 
-    setUser(session.user)
+      setUser(session.user)
 
-    // Get profile
-    const { data: profileData } = await supabase
-      .from('user_profiles')
-      .select('*')
-      .eq('id', session.user.id)
-      .single()
+      // Fetch profile and reviews in parallel using API routes
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 15000)
 
-    setProfile(profileData)
-    setFullName(profileData?.full_name || '')
+      try {
+        // Get access token from session
+        if (!session.access_token) {
+          throw new Error('No access token available. Please log in again.')
+        }
 
-    // Get user's reviews
-    await fetchReviews(session.user.id)
-    setLoading(false)
-  }
+        const [profileResponse, reviewsResponse] = await Promise.all([
+          fetch('/api/profile', {
+            headers: {
+              'Authorization': `Bearer ${session.access_token}`,
+            },
+            signal: controller.signal,
+          }),
+          fetch('/api/profile/reviews', {
+            headers: {
+              'Authorization': `Bearer ${session.access_token}`,
+            },
+            signal: controller.signal,
+          }),
+        ])
 
-  const fetchReviews = async (userId: string) => {
-    const allReviews: any[] = []
+        clearTimeout(timeoutId)
 
-    // Neighborhood reviews
-    const { data: nReviews } = await supabase
-      .from('neighborhood_reviews')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
+        if (!profileResponse.ok) {
+          throw new Error('Failed to load profile')
+        }
 
-    if (nReviews) {
-      for (const review of nReviews) {
-        const { data: location } = await supabase
-          .from('neighborhoods')
-          .select('*')
-          .eq('id', review.neighborhood_id)
-          .single()
+        if (!reviewsResponse.ok) {
+          throw new Error('Failed to load reviews')
+        }
 
-        if (location) {
-          allReviews.push({
-            ...review,
-            type: 'neighborhood',
-            location,
-            avg: (review.safety + review.cleanliness + review.noise + review.community + review.transit + review.amenities) / 6
-          })
+        const profileData = await profileResponse.json()
+        const reviewsData = await reviewsResponse.json()
+
+        setProfile(profileData.profile)
+        setFullName(profileData.profile?.full_name || '')
+        setReviews(reviewsData.reviews || [])
+      } catch (fetchError: any) {
+        if (fetchError.name === 'AbortError') {
+          console.error('Request timed out')
+          alert('Request timed out. Please try again.')
+        } else {
+          throw fetchError
         }
       }
+    } catch (error) {
+      console.error('Error loading profile:', error)
+      alert('Error loading profile. Please refresh the page.')
+    } finally {
+      setLoading(false)
     }
-
-    // Building reviews
-    const { data: bReviews } = await supabase
-      .from('building_reviews')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-
-    if (bReviews) {
-      for (const review of bReviews) {
-        const { data: location } = await supabase
-          .from('buildings')
-          .select('*')
-          .eq('id', review.building_id)
-          .single()
-
-        if (location) {
-          allReviews.push({
-            ...review,
-            type: 'building',
-            location,
-            avg: (review.management + review.cleanliness + review.maintenance + review.rent_value + review.noise + review.amenities) / 6
-          })
-        }
-      }
-    }
-
-    setReviews(allReviews)
   }
 
   const handleUpdateProfile = async () => {
-    const { error } = await supabase
-      .from('user_profiles')
-      .update({ full_name: fullName })
-      .eq('id', user.id)
+    try {
+      // Use timeout for update operation
+      const updatePromise = supabase
+        .from('user_profiles')
+        .update({ full_name: fullName })
+        .eq('id', user.id)
 
-    if (!error) {
-      alert('✅ Profile updated!')
-      setEditing(false)
-      checkUser()
-    } else {
-      alert('❌ Error: ' + error.message)
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Update timed out')), 10000)
+      )
+
+      const { error } = await Promise.race([updatePromise, timeoutPromise]) as any
+
+      if (!error) {
+        alert('✅ Profile updated!')
+        setEditing(false)
+        checkUser()
+      } else {
+        alert('❌ Error: ' + error.message)
+      }
+    } catch (error: any) {
+      alert('❌ Error: ' + (error.message || 'Request timed out'))
     }
   }
 
@@ -131,24 +128,56 @@ export default function ProfilePage() {
 
     setActionLoading(reviewId)
     
-    const table = type === 'neighborhood' ? 'neighborhood_reviews' : 'building_reviews'
+    const table = type === 'neighborhood' 
+      ? 'neighborhood_reviews' 
+      : type === 'building'
+      ? 'building_reviews'
+      : type === 'landlord'
+      ? 'landlord_reviews'
+      : 'rent_company_reviews'
     
     console.log('🗑️ Deleting review:', reviewId, 'from', table)
     
-    const { error } = await supabase
-      .from(table)
-      .delete()
-      .eq('id', reviewId)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        alert('Session expired. Please log in again.')
+        router.push('/login')
+        return
+      }
 
-    if (!error) {
-      console.log('✅ Review deleted successfully!')
-      alert('✅ Review deleted!')
-      setDeleteConfirm(null)
-      setActionLoading(null)
-      fetchReviews(user.id)
-    } else {
+      // Use timeout for delete operation
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 10000)
+
+      const deletePromise = supabase
+        .from(table)
+        .delete()
+        .eq('id', reviewId)
+
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Delete timed out')), 10000)
+      )
+
+      const { error } = await Promise.race([deletePromise, timeoutPromise]) as any
+
+      clearTimeout(timeoutId)
+
+      if (!error) {
+        console.log('✅ Review deleted successfully!')
+        alert('✅ Review deleted!')
+        setDeleteConfirm(null)
+        setActionLoading(null)
+        checkUser() // Reload profile data
+      } else {
+        console.error('❌ Delete error:', error)
+        alert('❌ Error deleting review: ' + error.message)
+        setActionLoading(null)
+        setDeleteConfirm(null)
+      }
+    } catch (error: any) {
       console.error('❌ Delete error:', error)
-      alert('❌ Error deleting review: ' + error.message)
+      alert('❌ Error deleting review: ' + (error.message || 'Request timed out'))
       setActionLoading(null)
       setDeleteConfirm(null)
     }
@@ -173,8 +202,85 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-primary-500"></div>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-6">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          {/* Header Skeleton */}
+          <div className="mb-6 animate-pulse">
+            <div className="h-9 bg-gray-200 rounded-xl w-48 mb-2"></div>
+            <div className="h-5 bg-gray-200 rounded-lg w-64"></div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            {/* Sidebar Skeleton */}
+            <div className="lg:col-span-1 space-y-4">
+              <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200 animate-pulse">
+                <div className="flex flex-col items-center text-center mb-4">
+                  <div className="w-20 h-20 bg-gray-200 rounded-full mb-3"></div>
+                  <div className="h-6 bg-gray-200 rounded-lg w-32 mb-2"></div>
+                  <div className="h-4 bg-gray-200 rounded-lg w-48"></div>
+                </div>
+                <div className="border-t border-gray-200 pt-4 mt-4 space-y-3">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div key={i} className="flex items-center justify-between">
+                      <div className="h-4 bg-gray-200 rounded w-24"></div>
+                      <div className="h-4 bg-gray-200 rounded w-8"></div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="bg-white rounded-xl shadow-lg p-5 border border-gray-200 animate-pulse">
+                <div className="h-5 bg-gray-200 rounded-lg w-32 mb-4"></div>
+                <div className="space-y-3">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div key={i} className="flex items-center space-x-3">
+                      <div className="w-10 h-10 bg-gray-200 rounded-lg"></div>
+                      <div className="flex-1">
+                        <div className="h-4 bg-gray-200 rounded w-24 mb-2"></div>
+                        <div className="h-3 bg-gray-200 rounded w-32"></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Main Content Skeleton */}
+            <div className="lg:col-span-3">
+              <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200 animate-pulse">
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <div className="h-7 bg-gray-200 rounded-lg w-40 mb-2"></div>
+                    <div className="h-4 bg-gray-200 rounded w-32"></div>
+                  </div>
+                  <div className="h-11 bg-gray-200 rounded-lg w-40"></div>
+                </div>
+                <div className="space-y-4">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="bg-gray-50 rounded-xl p-6 border border-gray-200">
+                      <div className="flex items-start justify-between mb-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="w-8 h-8 bg-gray-200 rounded-lg"></div>
+                            <div className="h-6 bg-gray-200 rounded-lg w-48"></div>
+                          </div>
+                          <div className="h-4 bg-gray-200 rounded w-32"></div>
+                        </div>
+                        <div className="h-10 bg-gray-200 rounded-lg w-20"></div>
+                      </div>
+                      <div className="h-4 bg-gray-200 rounded w-full mb-2"></div>
+                      <div className="h-4 bg-gray-200 rounded w-3/4 mb-4"></div>
+                      <div className="flex gap-3">
+                        <div className="h-10 bg-gray-200 rounded-lg flex-1"></div>
+                        <div className="h-10 bg-gray-200 rounded-lg flex-1"></div>
+                        <div className="h-10 bg-gray-200 rounded-lg flex-1"></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     )
   }
@@ -189,157 +295,219 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-6">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
-        {/* Profile Header */}
-        <div className="bg-white rounded-2xl shadow-xl p-6 lg:p-8 mb-6 border border-gray-200">
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 mb-6">
-            <div className="flex items-center space-x-4 lg:space-x-6">
-              <div className="w-20 h-20 lg:w-24 lg:h-24 bg-gradient-to-br from-primary-500 to-primary-600 rounded-2xl flex items-center justify-center shadow-lg">
-                <User className="w-10 h-10 lg:w-12 lg:h-12 text-white" />
+        {/* Header */}
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-gray-900">Profile</h1>
+          <p className="text-gray-600 mt-1">Manage your account and review activity</p>
+        </div>
+
+        {/* Status Banner */}
+        {(profile?.status === 'banned' || profile?.status === 'cooled' || profile?.warning_count > 0) && (
+          <div className={`mb-6 p-6 rounded-2xl border-2 ${
+            profile.status === 'banned' 
+              ? 'bg-red-50 border-red-200' 
+              : profile.status === 'cooled'
+              ? 'bg-blue-50 border-blue-200'
+              : 'bg-yellow-50 border-yellow-200'
+          }`}>
+            <div className="flex items-start space-x-4">
+              {profile.status === 'banned' && <Ban className="w-6 h-6 text-red-600 flex-shrink-0 mt-1" />}
+              {profile.status === 'cooled' && <Clock className="w-6 h-6 text-blue-600 flex-shrink-0 mt-1" />}
+              {profile.status === 'active' && profile.warning_count > 0 && <AlertTriangle className="w-6 h-6 text-yellow-600 flex-shrink-0 mt-1" />}
+              <div className="flex-1">
+                {profile.status === 'banned' && (
+                  <>
+                    <h3 className="font-bold text-red-900 text-lg mb-2">🚫 Account Banned</h3>
+                    <p className="text-red-800 mb-2">{profile.moderation_reason || 'No reason provided'}</p>
+                    {profile.banned_until && <p className="text-sm text-red-700">Ban expires: {new Date(profile.banned_until).toLocaleDateString()}</p>}
+                  </>
+                )}
+                {profile.status === 'cooled' && (
+                  <>
+                    <h3 className="font-bold text-blue-900 text-lg mb-2">❄️ Cooling Off Period</h3>
+                    <p className="text-blue-800 mb-2">{profile.moderation_reason || 'No reason provided'}</p>
+                    {profile.cooled_until && <p className="text-sm text-blue-700">Period ends: {new Date(profile.cooled_until).toLocaleDateString()}</p>}
+                  </>
+                )}
+                {profile.status === 'active' && profile.warning_count > 0 && (
+                  <>
+                    <h3 className="font-bold text-yellow-900 text-lg mb-2">⚠️ You have {profile.warning_count} warning{profile.warning_count > 1 ? 's' : ''}</h3>
+                    <p className="text-yellow-800">Please review our community guidelines to avoid further action.</p>
+                  </>
+                )}
               </div>
-              <div>
-                {editing ? (
+            </div>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          {/* Sidebar */}
+          <div className="lg:col-span-1 space-y-4">
+            {/* Profile Card */}
+            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
+              <div className="flex flex-col items-center text-center mb-4">
+                <div className="w-20 h-20 bg-gradient-to-br from-primary-500 to-primary-600 rounded-full flex items-center justify-center shadow-lg mb-3">
+                  <User className="w-10 h-10 text-white" />
+                </div>
+                <h2 className="text-xl font-bold text-gray-900">{profile?.full_name || 'User'}</h2>
+                <p className="text-sm text-gray-500">{user?.email}</p>
+                {profile?.is_admin && (
+                  <span className="mt-2 bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-3 py-1 rounded-full text-xs font-bold inline-flex items-center space-x-1">
+                    <Shield className="w-3 h-3" />
+                    <span>Admin</span>
+                  </span>
+                )}
+              </div>
+              
+              <div className="border-t border-gray-200 pt-4 mt-4 space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600">Total Reviews</span>
+                  <span className="font-bold text-gray-900">{stats.totalReviews}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600">Avg Rating</span>
+                  <span className="font-bold text-gray-900 flex items-center">
+                    <Star className="w-3 h-3 fill-yellow-400 text-yellow-400 mr-1" />
+                    {stats.avgRating}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600">Published</span>
+                  <span className="font-bold text-green-600">{stats.approved}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600">Pending</span>
+                  <span className="font-bold text-yellow-600">{stats.pending}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Actions */}
+            <div className="bg-white rounded-xl shadow-lg p-5 border border-gray-200">
+              <h3 className="font-bold text-gray-900 mb-4 flex items-center">
+                <TrendingUp className="w-4 h-4 mr-2" />
+                Quick Actions
+              </h3>
+              <div className="space-y-2">
+                <Link
+                  href="/explore"
+                  className="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors group"
+                >
+                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <Star className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <div className="font-semibold text-gray-900 text-sm">Write Review</div>
+                    <div className="text-xs text-gray-500">Rate a location</div>
+                  </div>
+                </Link>
+
+                <button
+                  onClick={() => setEditing(true)}
+                  className="w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors group"
+                >
+                  <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <Edit className="w-5 h-5 text-green-600" />
+                  </div>
+                  <div className="flex-1 text-left">
+                    <div className="font-semibold text-gray-900 text-sm">Edit Profile</div>
+                    <div className="text-xs text-gray-500">Update your name</div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={handleResetPassword}
+                  className="w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors group"
+                >
+                  <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <Lock className="w-5 h-5 text-purple-600" />
+                  </div>
+                  <div className="flex-1 text-left">
+                    <div className="font-semibold text-gray-900 text-sm">Change Password</div>
+                    <div className="text-xs text-gray-500">Update password</div>
+                  </div>
+                </button>
+
+                {profile?.is_admin && (
+                  <Link
+                    href="/admin"
+                    className="flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors group"
+                  >
+                    <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <Shield className="w-5 h-5 text-orange-600" />
+                    </div>
+                    <div>
+                      <div className="font-semibold text-gray-900 text-sm">Admin Panel</div>
+                      <div className="text-xs text-gray-500">Manage platform</div>
+                    </div>
+                  </Link>
+                )}
+
+                <div className="border-t border-gray-200 pt-2 mt-2">
+                  <button
+                    onClick={handleSignOut}
+                    className="w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-red-50 transition-colors group text-red-600"
+                  >
+                    <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <LogOut className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="font-semibold text-sm">Sign Out</div>
+                    </div>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Main Content */}
+          <div className="lg:col-span-3">
+            {/* Profile Edit Modal */}
+            {editing && (
+              <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200 mb-6">
+              <h3 className="text-lg font-bold text-gray-900 mb-4">Edit Profile</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
                   <input
                     type="text"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
-                    className="text-2xl lg:text-3xl font-bold text-gray-900 border-2 border-primary-500 rounded-lg px-3 py-2 w-full"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                     placeholder="Enter your name"
                   />
-                ) : (
-                  <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">{profile?.full_name}</h1>
-                )}
-                <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-4 mt-2 gap-2 sm:gap-0">
-                  <div className="flex items-center text-gray-600 text-sm">
-                    <Mail className="w-4 h-4 mr-2" />
-                    <span>{user?.email}</span>
-                  </div>
-                  <div className="flex items-center text-gray-600 text-sm">
-                    <Calendar className="w-4 h-4 mr-2" />
-                    <span>Joined {new Date(profile?.created_at).toLocaleDateString()}</span>
-                  </div>
                 </div>
-                {profile?.is_admin && (
-                  <div className="mt-2">
-                    <span className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white px-3 py-1 rounded-full text-xs font-bold inline-flex items-center space-x-1">
-                      <Shield className="w-3 h-3" />
-                      <span>Admin</span>
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-            <div className="flex space-x-2 w-full md:w-auto">
-              {editing ? (
-                <>
+                <div className="flex space-x-3">
                   <button
                     onClick={handleUpdateProfile}
-                    className="flex-1 md:flex-none bg-green-500 text-white px-4 lg:px-6 py-2 rounded-lg hover:bg-green-600 transition-all font-semibold text-sm"
+                    className="flex-1 bg-primary-500 text-white px-4 py-2 rounded-lg hover:bg-primary-600 transition-all font-semibold"
                   >
-                    Save
+                    Save Changes
                   </button>
                   <button
                     onClick={() => {
                       setEditing(false)
                       setFullName(profile?.full_name || '')
                     }}
-                    className="flex-1 md:flex-none bg-gray-500 text-white px-4 lg:px-6 py-2 rounded-lg hover:bg-gray-600 transition-all font-semibold text-sm"
+                    className="flex-1 bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300 transition-all font-semibold"
                   >
                     Cancel
                   </button>
-                </>
-              ) : (
-                <button
-                  onClick={() => setEditing(true)}
-                  className="flex-1 md:flex-none bg-primary-500 text-white px-4 lg:px-6 py-2 rounded-lg hover:bg-primary-600 transition-all font-semibold flex items-center justify-center space-x-2 text-sm"
-                >
-                  <Edit className="w-4 h-4" />
-                  <span>Edit Profile</span>
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Stats */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-4 pt-6 border-t border-gray-200">
-            <div className="bg-gradient-to-br from-primary-50 to-primary-100 rounded-xl p-4 text-center">
-              <div className="text-2xl lg:text-3xl font-bold text-primary-600">{stats.totalReviews}</div>
-              <div className="text-xs lg:text-sm text-primary-700 font-medium">Total Reviews</div>
-            </div>
-            <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 rounded-xl p-4 text-center">
-              <div className="text-2xl lg:text-3xl font-bold text-yellow-600">{stats.avgRating}★</div>
-              <div className="text-xs lg:text-sm text-yellow-700 font-medium">Avg Rating</div>
-            </div>
-            <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-4 text-center">
-              <div className="text-2xl lg:text-3xl font-bold text-green-600">{stats.approved}</div>
-              <div className="text-xs lg:text-sm text-green-700 font-medium">Published</div>
-            </div>
-            <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl p-4 text-center">
-              <div className="text-2xl lg:text-3xl font-bold text-orange-600">{stats.pending}</div>
-              <div className="text-xs lg:text-sm text-orange-700 font-medium">Pending</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Quick Actions */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-          <button
-            onClick={handleResetPassword}
-            className="bg-white rounded-xl p-5 shadow-md hover:shadow-lg transition-all text-left border border-gray-200 hover:border-blue-400 group"
-          >
-            <div className="flex items-center space-x-3">
-              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
-                <Lock className="w-6 h-6 text-blue-600" />
-              </div>
-              <div>
-                <h3 className="font-bold text-gray-900 text-sm">Reset Password</h3>
-                <p className="text-xs text-gray-600">Update your password</p>
-              </div>
-            </div>
-          </button>
-
-          {profile?.is_admin && (
-            <Link
-              href="/admin"
-              className="bg-gradient-to-br from-yellow-400 to-orange-500 rounded-xl p-5 shadow-md hover:shadow-lg transition-all text-left group"
-            >
-              <div className="flex items-center space-x-3">
-                <div className="w-12 h-12 bg-white/20 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
-                  <Shield className="w-6 h-6 text-white" />
                 </div>
+              </div>
+            </div>
+            )}
+
+            {/* Reviews Section */}
+            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
                 <div>
-                  <h3 className="font-bold text-white text-sm">Admin Panel</h3>
-                  <p className="text-xs text-white/90">Manage platform</p>
+                  <h2 className="text-xl lg:text-2xl font-bold text-gray-900">Your Reviews</h2>
+                  <p className="text-sm text-gray-600 mt-1">{reviews.length} review{reviews.length !== 1 ? 's' : ''} posted</p>
                 </div>
-              </div>
-            </Link>
-          )}
-
-          <button
-            onClick={handleSignOut}
-            className="bg-white rounded-xl p-5 shadow-md hover:shadow-lg transition-all text-left border border-gray-200 hover:border-red-400 group"
-          >
-            <div className="flex items-center space-x-3">
-              <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform">
-                <LogOut className="w-6 h-6 text-red-600" />
-              </div>
-              <div>
-                <h3 className="font-bold text-gray-900 text-sm">Sign Out</h3>
-                <p className="text-xs text-gray-600">Log out of account</p>
-              </div>
-            </div>
-          </button>
-        </div>
-
-        {/* Reviews Section */}
-        <div className="bg-white rounded-2xl shadow-xl p-6 lg:p-8 border border-gray-200">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
-            <div>
-              <h2 className="text-xl lg:text-2xl font-bold text-gray-900">Your Reviews</h2>
-              <p className="text-sm text-gray-600 mt-1">{reviews.length} review{reviews.length !== 1 ? 's' : ''} posted</p>
-            </div>
             <Link
               href="/"
               className="w-full sm:w-auto bg-gradient-to-r from-primary-500 to-primary-600 text-white px-6 py-3 rounded-lg hover:from-primary-600 hover:to-primary-700 transition-all font-semibold flex items-center justify-center space-x-2 shadow-md"
@@ -478,6 +646,8 @@ export default function ProfilePage() {
               ))}
             </div>
           )}
+            </div>
+          </div>
         </div>
       </div>
     </div>

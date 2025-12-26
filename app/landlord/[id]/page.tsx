@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { Star, MapPin, Phone, Mail, Globe, User, MessageSquare, Wrench, Scale, Briefcase, ArrowLeft, Camera, Calendar, CheckCircle, XCircle, AlertCircle } from 'lucide-react'
+import { Star, MapPin, Phone, Mail, Globe, User, MessageSquare, Wrench, Scale, Briefcase, ArrowLeft, Camera, Calendar, CheckCircle, XCircle, AlertCircle, BadgeCheck, Flag, Image as ImageIcon } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
 
@@ -30,6 +30,7 @@ interface Landlord {
 
 interface Review {
   id: string
+  user_id: string
   review: string
   comment?: string
   pros: string | null
@@ -53,6 +54,12 @@ interface Review {
   created_at: string
   status: string
   images?: string[] | null
+  verification_request_id?: string | null
+}
+
+interface UserProfile {
+  id: string
+  is_verified_tenant: boolean
 }
 
 export default function LandlordPage() {
@@ -67,6 +74,10 @@ export default function LandlordPage() {
   const [uploadingImage, setUploadingImage] = useState(false)
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [hasReviewed, setHasReviewed] = useState(false)
+  const [pendingReviewCount, setPendingReviewCount] = useState(0)
+  const [verifiedUsers, setVerifiedUsers] = useState<Set<string>>(new Set())
+  const [allPhotos, setAllPhotos] = useState<Array<{url: string, reviewId: string, userId: string, displayName: string}>>([])
+  const [selectedPhoto, setSelectedPhoto] = useState<{url: string, reviewId: string, userId: string, displayName: string} | null>(null)
 
   useEffect(() => {
     if (params.id) {
@@ -92,26 +103,52 @@ export default function LandlordPage() {
 
   const fetchLandlord = async () => {
     try {
-      const { data: landlordData, error: landlordError } = await supabase
+      setLoading(true)
+      // Try to find landlord by slug first, then by ID
+      let { data: landlordData, error: landlordError } = await supabase
         .from('landlords')
         .select('*')
-        .eq('id', params.id)
+        .eq('slug', params.id)
         .single()
+
+      // If not found by slug, try by ID
+      if (landlordError && landlordError.code === 'PGRST116') {
+        const { data: landlordByIdData, error: landlordByIdError } = await supabase
+          .from('landlords')
+          .select('*')
+          .eq('id', params.id)
+          .single()
+        
+        landlordData = landlordByIdData
+        landlordError = landlordByIdError
+      }
 
       if (landlordError) {
         console.error('Error fetching landlord:', landlordError)
+        setLandlord(null)
+        setLoading(false)
         return
       }
 
       setLandlord(landlordData)
 
-      // Fetch approved reviews only
+      // Fetch approved reviews only using the actual landlord ID (limit to 50 initially for performance)
       const { data: reviewsData, error: reviewsError } = await supabase
         .from('landlord_reviews')
-        .select('*')
-        .eq('landlord_id', params.id)
+        .select('id, user_id, review, comment, pros, cons, overall_rating, responsiveness, responsiveness_rating, maintenance, maintenance_rating, communication, communication_rating, fairness, fairness_rating, professionalism, professionalism_rating, years_rented, monthly_rent, would_recommend, is_anonymous, display_name, created_at, status, images, verification_request_id')
+        .eq('landlord_id', landlordData.id)
         .eq('status', 'approved')
         .order('created_at', { ascending: false })
+        .limit(50)
+
+      // Fetch pending reviews count
+      const { data: pendingData } = await supabase
+        .from('landlord_reviews')
+        .select('id')
+        .eq('landlord_id', landlordData.id)
+        .eq('status', 'pending')
+      
+      setPendingReviewCount(pendingData?.length || 0)
 
       if (reviewsError) {
         console.error('Error fetching reviews:', reviewsError)
@@ -121,8 +158,63 @@ export default function LandlordPage() {
           reviewsData.forEach((review: any) => {
             console.log(`Review ${review.id} images:`, review.images)
           })
+          
+          // Fetch verified users
+          const userIds = reviewsData.map((r: any) => r.user_id).filter(Boolean)
+          let verifiedSet = new Set<string>()
+          if (userIds.length > 0) {
+            const { data: profiles } = await supabase
+              .from('user_profiles')
+              .select('id, is_verified_tenant')
+              .in('id', userIds)
+            
+            if (profiles) {
+              verifiedSet = new Set(
+                profiles.filter((p: UserProfile) => p.is_verified_tenant).map((p: UserProfile) => p.id)
+              )
+              setVerifiedUsers(verifiedSet)
+            }
+          }
+          
+          // Collect all photos for gallery
+          const photoList: Array<{url: string, reviewId: string, userId: string, displayName: string}> = []
+          reviewsData.forEach((review: any) => {
+            if (review.images) {
+              let imageUrls: string[] = []
+              if (Array.isArray(review.images)) {
+                imageUrls = review.images
+              } else if (typeof review.images === 'string') {
+                try {
+                  const parsed = JSON.parse(review.images)
+                  imageUrls = Array.isArray(parsed) ? parsed : [review.images]
+                } catch {
+                  imageUrls = [review.images]
+                }
+              }
+              
+              imageUrls.forEach((url: string) => {
+                photoList.push({
+                  url,
+                  reviewId: review.id,
+                  userId: review.user_id,
+                  displayName: review.is_anonymous ? 'Anonymous User' : (review.display_name || 'Anonymous User')
+                })
+              })
+            }
+          })
+          setAllPhotos(photoList)
+          
+          // Sort: verified reviews first, then by date
+          const sortedReviews = (reviewsData || []).sort((a: Review, b: Review) => {
+            const aVerified = verifiedSet.has(a.user_id)
+            const bVerified = verifiedSet.has(b.user_id)
+            if (aVerified && !bVerified) return -1
+            if (!aVerified && bVerified) return 1
+            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          })
+          
+          setReviews(sortedReviews)
         }
-        setReviews(reviewsData || [])
         
         // Check if current user has reviewed this landlord
         if (currentUser && reviewsData) {
@@ -145,12 +237,49 @@ export default function LandlordPage() {
     return 'from-red-500 to-rose-700'
   }
 
+  const getRatingTextColor = (rating: number) => {
+    // Good ratings: 4.0 and above = green
+    if (rating >= 4.0) return 'text-green-600'
+    // Normal ratings: 3.0 to 3.9 = yellow
+    if (rating >= 3.0) return 'text-yellow-600'
+    // Bad ratings: below 3.0 = red
+    return 'text-red-600'
+  }
+
   const getRatingText = (rating: number) => {
     if (rating >= 4.5) return 'Excellent'
     if (rating >= 3.5) return 'Good'
     if (rating >= 2.5) return 'Average'
     if (rating >= 1.5) return 'Poor'
     return 'Very Poor'
+  }
+
+  const handleReportPhoto = async (photoUrl: string, reviewId: string, reviewType: string) => {
+    if (!currentUser) {
+      alert('Please log in to report a photo')
+      return
+    }
+
+    const reason = prompt('Why are you reporting this photo? (e.g., Inappropriate, Spam, Fake)')
+    if (!reason) return
+
+    try {
+      const { error } = await supabase
+        .from('photo_reports')
+        .insert({
+          photo_url: photoUrl,
+          review_id: reviewId,
+          review_type: reviewType,
+          reported_by: currentUser.id,
+          reason: reason
+        })
+
+      if (error) throw error
+      alert('✅ Photo reported. Thank you for helping keep our community safe!')
+    } catch (error: any) {
+      console.error('Error reporting photo:', error)
+      alert('Failed to report photo: ' + error.message)
+    }
   }
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -254,29 +383,29 @@ export default function LandlordPage() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-br from-gray-50 via-white to-gray-50">
-      {/* Modern Compact Header */}
-      <div className="bg-white border-b border-gray-200 flex-shrink-0 sticky top-0 z-10">
-        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-2">
+      {/* Modern Minimal Header */}
+      <div className="bg-white border-b border-gray-100 flex-shrink-0 sticky top-0 z-10 backdrop-blur-sm bg-white/95">
+        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-3">
           <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center space-x-3">
-              <Link
-                href="/explore"
-                className="inline-flex items-center text-gray-600 hover:text-primary-600 transition-colors p-2 -ml-2 rounded-lg hover:bg-gray-100"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </Link>
-              <div>
-                <h1 className="text-lg sm:text-xl font-bold text-gray-900 line-clamp-1">{landlord.name}</h1>
-                {landlord.company_name && (
-                  <p className="text-xs sm:text-sm text-gray-600 line-clamp-1">{landlord.company_name}</p>
-                )}
-              </div>
+            <Link
+              href="/explore"
+              className="inline-flex items-center text-gray-500 hover:text-gray-900 transition-colors p-1.5 -ml-1.5 rounded-lg hover:bg-gray-50"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </Link>
+            <div className="flex-1 min-w-0 mx-4">
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900 truncate">{landlord.name}</h1>
+              {landlord.company_name && (
+                <p className="text-sm text-gray-500 truncate mt-0.5">{landlord.company_name}</p>
+              )}
             </div>
-            {/* Quick Rating Badge */}
-            <div className="flex items-center space-x-2 bg-gradient-to-r from-primary-50 to-primary-100 px-3 sm:px-4 py-2 rounded-full border border-primary-200">
-              <Star className="w-4 h-4 text-yellow-400 fill-yellow-400 flex-shrink-0" />
-              <span className="text-base sm:text-lg font-bold text-gray-900">{(landlord.overall_rating || 0).toFixed(1)}</span>
-              <span className="text-xs text-gray-600 hidden sm:inline">({landlord.total_reviews || 0})</span>
+            {/* Prominent Rating Display */}
+            <div className="flex items-center gap-2 bg-gradient-to-br from-amber-50 to-yellow-50 px-4 py-2 rounded-xl border border-amber-200/50">
+              <Star className="w-5 h-5 text-amber-500 fill-amber-500" />
+              <div className="flex flex-col">
+                <span className={`text-2xl font-bold leading-none ${getRatingTextColor(landlord.overall_rating || 0)}`}>{(landlord.overall_rating || 0).toFixed(1)}</span>
+                <span className="text-xs text-gray-600 leading-none mt-0.5">{landlord.total_reviews || 0} review{landlord.total_reviews !== 1 ? 's' : ''}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -284,12 +413,11 @@ export default function LandlordPage() {
 
       {/* Main Content */}
       <div className="flex-1 bg-white">
-        <div className="max-w-[1600px] mx-auto px-6 py-8">
-          <div className="flex flex-col lg:flex-row gap-8 items-start">
+        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
+          <div className="flex flex-col lg:flex-row gap-8 lg:gap-12 items-start">
           {/* LEFT SIDE - Profile Information (Sticky) */}
-          <div className="w-full lg:w-[400px] lg:flex-shrink-0 lg:border-r lg:border-gray-200 lg:pr-8">
-            <div className="lg:sticky lg:top-24">
-            <div className="bg-white space-y-6">
+          <div className="w-full lg:w-[380px] lg:flex-shrink-0 lg:border-r lg:border-gray-100 lg:pr-8">
+            <div className="lg:sticky lg:top-20 space-y-6">
               {/* Profile Image/Initial */}
               <div className="relative">
                 <div className="relative w-full aspect-square rounded-2xl overflow-hidden bg-gradient-to-br from-purple-100 to-pink-100 group">
@@ -299,22 +427,19 @@ export default function LandlordPage() {
                       alt={landlord.name}
                       className="w-full h-full object-cover"
                       onError={(e) => {
-                        // If image fails to load, hide the img element and show the fallback
                         e.currentTarget.style.display = 'none'
                       }}
                     />
                   ) : (
                     <div className="flex items-center justify-center h-full">
-                      <span className="text-7xl font-bold text-white opacity-90">{landlord.name.charAt(0).toUpperCase()}</span>
+                      <span className="text-6xl font-bold text-white opacity-90">{landlord.name.charAt(0).toUpperCase()}</span>
                     </div>
                   )}
-                  {/* Fallback in case image fails to load */}
                   {landlord.profile_image && (
                     <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-purple-100 to-pink-100" style={{ display: 'none' }}>
-                      <span className="text-7xl font-bold text-white opacity-90">{landlord.name.charAt(0).toUpperCase()}</span>
+                      <span className="text-6xl font-bold text-white opacity-90">{landlord.name.charAt(0).toUpperCase()}</span>
                     </div>
                   )}
-                  {/* Upload Overlay - Only show if user has reviewed */}
                   {hasReviewed && (
                     <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer">
                       <input
@@ -337,7 +462,7 @@ export default function LandlordPage() {
                         ) : (
                           <>
                             <Camera className="w-4 h-4" />
-                            {landlord.profile_image ? 'Change Photo' : 'Add Photo'}
+                            {landlord.profile_image ? 'Change' : 'Add Photo'}
                           </>
                         )}
                       </label>
@@ -346,50 +471,36 @@ export default function LandlordPage() {
                 </div>
               </div>
 
-              {/* Name and Badge */}
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <h1 className="text-2xl font-bold text-gray-900">{landlord.name}</h1>
-                  {(landlord.overall_rating || 0) >= 4.5 && (
-                    <span className="px-2 py-0.5 bg-blue-500 text-white text-xs font-semibold rounded">TOP RATED</span>
-                  )}
-                </div>
-                <p className="text-sm text-gray-600 mb-4">{landlord.city}, {landlord.province}</p>
-                
-                {/* Rating Display */}
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="flex items-center gap-1">
-                    <Star className="w-5 h-5 text-yellow-400 fill-yellow-400" />
-                    <span className="text-xl font-bold text-gray-900">{(landlord.overall_rating || 0).toFixed(1)}</span>
+              {/* Location */}
+              <div className="flex items-center text-gray-600">
+                <MapPin className="w-4 h-4 mr-2 text-gray-400" />
+                <span className="text-sm">{landlord.city}, {landlord.province}</span>
+              </div>
+
+              {/* Prominent Rate Button */}
+              <Link
+                href={`/rate/landlord?prefill=${encodeURIComponent(JSON.stringify({ landlord: landlord.name }))}`}
+                className="block w-full bg-gradient-to-r from-primary-600 to-primary-700 text-white text-center px-6 py-3.5 rounded-xl hover:from-primary-700 hover:to-primary-800 transition-all font-semibold text-base shadow-lg shadow-primary-500/20 hover:shadow-xl hover:shadow-primary-500/30 transform hover:-translate-y-0.5"
+              >
+                ⭐ Rate This Landlord
+              </Link>
+
+              {/* Verified Badge - Compact */}
+              {Array.from(verifiedUsers).length > 0 && (
+                <div className="bg-green-50 rounded-xl p-3 border border-green-200/50">
+                  <div className="flex items-center justify-center space-x-2">
+                    <BadgeCheck className="w-4 h-4 text-green-600" />
+                    <span className="text-sm font-medium text-green-900">
+                      {Array.from(verifiedUsers).length} Verified {Array.from(verifiedUsers).length === 1 ? 'Tenant' : 'Tenants'}
+                    </span>
                   </div>
-                  <span className="text-sm text-gray-500">{landlord.total_reviews || 0} reviews</span>
                 </div>
-              </div>
+              )}
 
-                            {/* Action Buttons */}
-              <div className="flex gap-2">
-                <Link
-                  href={`/rate/landlord?prefill=${encodeURIComponent(JSON.stringify({ landlord: landlord.name }))}`}
-                  className="flex-1 bg-primary-600 text-white text-center px-4 py-2.5 rounded-lg hover:bg-primary-700 transition-colors font-medium"
-                >
-                  Rate Landlord
-                </Link>
-                {(landlord.phone || landlord.email) && (
-                  <button className="px-4 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium text-gray-700">
-                    Contact
-                  </button>
-                )}
-              </div>
-
-              {/* Navigation Tabs */}
-              <div className="flex gap-4 border-b border-gray-200">
-                <button className="pb-3 text-sm font-semibold text-gray-900 border-b-2 border-gray-900">Reviews ({landlord.total_reviews || 0})</button>
-              </div>
-
-              {/* Rating Breakdown */}
-              <div className="bg-gray-50 rounded-xl p-4">
-                <h2 className="text-sm font-semibold text-gray-900 mb-3">Rating Breakdown</h2>
-                <div className="space-y-3">
+              {/* Rating Breakdown - Compact */}
+              <div className="bg-white rounded-xl p-4 border border-gray-200">
+                <h2 className="text-sm font-bold text-gray-900 mb-3 uppercase tracking-wide">Rating Breakdown</h2>
+                <div className="space-y-2.5">
                   {[
                     { label: 'Responsiveness', rating: landlord.responsiveness_rating || 0, icon: MessageSquare, color: 'blue' },
                     { label: 'Maintenance', rating: landlord.maintenance_rating || 0, icon: Wrench, color: 'green' },
@@ -401,27 +512,21 @@ export default function LandlordPage() {
                     const ratingValue = category.rating || 0
                     const percentage = (ratingValue / 5) * 100
                     return (
-                      <div key={category.label}>
-                        <div className="flex items-center justify-between mb-1.5">
-                          <div className="flex items-center space-x-2">
-                            <Icon className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${
-                              category.color === 'blue' ? 'text-blue-600' :
-                              category.color === 'green' ? 'text-green-600' :
-                              category.color === 'purple' ? 'text-purple-600' :
-                              category.color === 'yellow' ? 'text-yellow-600' :
-                              'text-indigo-600'
-                            }`} />
-                            <span className="text-xs sm:text-sm font-medium text-gray-700">{category.label}</span>
+                      <div key={category.label} className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-medium text-gray-700">{category.label}</span>
+                          <div className="flex items-center space-x-1">
+                            <Star className="w-3 h-3 text-amber-400 fill-amber-400" />
+                            <span className={`text-xs font-bold ${getRatingTextColor(ratingValue)}`}>{ratingValue.toFixed(1)}</span>
                           </div>
-                          <span className="text-xs sm:text-sm font-bold text-gray-900">{ratingValue.toFixed(1)}</span>
                         </div>
-                        <div className="w-full h-1.5 sm:h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
                           <div
-                            className={`h-full rounded-full transition-all ${
-                              percentage >= 80 ? 'bg-green-500' :
-                              percentage >= 60 ? 'bg-blue-500' :
-                              percentage >= 40 ? 'bg-yellow-500' :
-                              'bg-red-500'
+                            className={`h-full rounded-full transition-all duration-500 ${
+                              percentage >= 80 ? 'bg-gradient-to-r from-green-500 to-green-600' :
+                              percentage >= 60 ? 'bg-gradient-to-r from-blue-500 to-blue-600' :
+                              percentage >= 40 ? 'bg-gradient-to-r from-yellow-500 to-yellow-600' :
+                              'bg-gradient-to-r from-red-500 to-red-600'
                             }`}
                             style={{ width: `${percentage}%` }}
                           />
@@ -432,70 +537,92 @@ export default function LandlordPage() {
                 </div>
               </div>
             </div>
-            </div>
           </div>
 
           {/* RIGHT SIDE - Reviews */}
           <div className="w-full lg:flex-1 lg:min-w-0">
-            {/* Filters */}
+            {/* Reviews Header */}
+            <div className="mb-6">
+              <h2 className="text-xl font-bold text-gray-900 mb-1">Reviews</h2>
+              <p className="text-sm text-gray-600">{landlord.total_reviews || 0} {landlord.total_reviews === 1 ? 'review' : 'reviews'}</p>
+            </div>
+
+            {/* Pending Reviews Notice */}
+            {pendingReviewCount > 0 && (
+              <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                <div className="flex items-start space-x-3">
+                  <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <h3 className="font-semibold text-amber-900 mb-1 text-sm">Review Under Approval</h3>
+                    <p className="text-xs text-amber-800">
+                      {pendingReviewCount === 1 
+                        ? '1 review pending approval'
+                        : `${pendingReviewCount} reviews pending approval`
+                      }
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Filters - Simplified */}
             {reviews.length > 0 && (
-              <div className="mb-6 pb-4 border-b border-gray-200">
-                <div className="flex flex-wrap gap-3">
-                
+              <div className="mb-6 pb-4 border-b border-gray-100">
+                <div className="flex flex-wrap gap-2">
                   {/* Rating Filter */}
-                    <select
-                      value={ratingFilter || ''}
-                      onChange={(e) => setRatingFilter(e.target.value ? parseInt(e.target.value) : null)}
-                      className="px-3 py-2 text-xs sm:text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none font-medium bg-white shadow-sm hover:border-primary-300 transition-colors"
-                    >
-                      <option value="">⭐ All Ratings</option>
-                      <option value="5">⭐⭐⭐⭐⭐ 5 Stars</option>
-                      <option value="4">⭐⭐⭐⭐ 4 Stars</option>
-                      <option value="3">⭐⭐⭐ 3 Stars</option>
-                      <option value="2">⭐⭐ 2 Stars</option>
-                      <option value="1">⭐ 1 Star</option>
-                    </select>
+                  <select
+                    value={ratingFilter || ''}
+                    onChange={(e) => setRatingFilter(e.target.value ? parseInt(e.target.value) : null)}
+                    className="px-3 py-2 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none bg-white hover:border-gray-300 transition-colors"
+                  >
+                    <option value="">All Ratings</option>
+                    <option value="5">5 Stars</option>
+                    <option value="4">4 Stars</option>
+                    <option value="3">3 Stars</option>
+                    <option value="2">2 Stars</option>
+                    <option value="1">1 Star</option>
+                  </select>
 
-                    {/* Recommendation Filter */}
-                    <select
-                      value={recommendFilter}
-                      onChange={(e) => setRecommendFilter(e.target.value as 'all' | 'recommend' | 'not-recommend')}
-                      className="px-3 py-2 text-xs sm:text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none font-medium bg-white shadow-sm hover:border-primary-300 transition-colors"
-                    >
-                      <option value="all">✅ All Reviews</option>
-                      <option value="recommend">👍 Would Recommend</option>
-                      <option value="not-recommend">👎 Would Not Recommend</option>
-                    </select>
+                  {/* Recommendation Filter */}
+                  <select
+                    value={recommendFilter}
+                    onChange={(e) => setRecommendFilter(e.target.value as 'all' | 'recommend' | 'not-recommend')}
+                    className="px-3 py-2 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none bg-white hover:border-gray-300 transition-colors"
+                  >
+                    <option value="all">All Reviews</option>
+                    <option value="recommend">Recommended</option>
+                    <option value="not-recommend">Not Recommended</option>
+                  </select>
 
-                    {/* Sort By */}
-                    <select
-                      value={sortBy}
-                      onChange={(e) => setSortBy(e.target.value as 'newest' | 'oldest' | 'highest' | 'lowest')}
-                      className="px-3 py-2 text-xs sm:text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none font-medium bg-white shadow-sm hover:border-primary-300 transition-colors"
-                    >
-                      <option value="newest">🕐 Newest First</option>
-                      <option value="oldest">🕐 Oldest First</option>
-                      <option value="highest">⭐ Highest Rated</option>
-                      <option value="lowest">⭐ Lowest Rated</option>
-                    </select>
+                  {/* Sort By */}
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value as 'newest' | 'oldest' | 'highest' | 'lowest')}
+                    className="px-3 py-2 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none bg-white hover:border-gray-300 transition-colors"
+                  >
+                    <option value="newest">Newest First</option>
+                    <option value="oldest">Oldest First</option>
+                    <option value="highest">Highest Rated</option>
+                    <option value="lowest">Lowest Rated</option>
+                  </select>
                 </div>
               </div>
             )}
             
             {reviews.length === 0 ? (
-                <div className="text-center py-16 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300">
-                  <User className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-500 text-lg mb-2">No reviews yet</p>
-                  <p className="text-gray-400 text-sm mb-6">Be the first to review this landlord</p>
+                <div className="text-center py-20 bg-gradient-to-br from-gray-50 to-white rounded-2xl border border-gray-200">
+                  <User className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-600 text-lg font-semibold mb-2">No reviews yet</p>
+                  <p className="text-gray-500 text-sm mb-6">Be the first to rate this landlord</p>
                   <Link
                     href={`/rate/landlord?landlord=${landlord.id}`}
-                    className="inline-block bg-primary-600 text-white px-8 py-3 rounded-lg hover:bg-primary-700 transition-colors font-medium"
+                    className="inline-block bg-gradient-to-r from-primary-600 to-primary-700 text-white px-8 py-3 rounded-xl hover:from-primary-700 hover:to-primary-800 transition-all font-semibold shadow-lg shadow-primary-500/20"
                   >
-                    Write a Review
+                    ⭐ Write First Review
                   </Link>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-6">
+                <div className="space-y-3">
                   {reviews
                     .filter(review => {
                       // Rating filter
@@ -528,30 +655,36 @@ export default function LandlordPage() {
                       const reviewText = review.comment || review.review || 'No review text provided'
                       
                       return (
-                        <div key={review.id} className="bg-white rounded-xl p-5 border border-gray-200 hover:border-primary-300 hover:shadow-lg transition-all">
-                          {/* Review Header */}
-                          <div className="flex items-start justify-between mb-4 gap-3">
-                            <div className="flex items-center space-x-3 min-w-0">
-                              <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${getRatingColor(review.overall_rating)} flex items-center justify-center text-white font-bold flex-shrink-0`}>
+                        <div key={review.id} className="bg-white rounded-lg p-4 border border-gray-200 hover:border-gray-300 hover:shadow-sm transition-all">
+                          {/* Review Header - Simplified */}
+                          <div className="flex items-start justify-between mb-2 gap-2">
+                            <div className="flex items-center space-x-2 min-w-0 flex-1">
+                              <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${getRatingColor(review.overall_rating)} flex items-center justify-center text-white font-bold flex-shrink-0 text-xs`}>
                                 {displayName.charAt(0).toUpperCase()}
                               </div>
-                              <div className="min-w-0">
-                                <p className="font-semibold text-base text-gray-900 truncate">{displayName}</p>
-                                <p className="text-sm text-gray-500">{new Date(review.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center space-x-1.5 flex-wrap gap-1">
+                                  <p className="font-semibold text-xs text-gray-900">{displayName}</p>
+                                  {verifiedUsers.has(review.user_id) && (
+                                    <BadgeCheck className="w-3 h-3 text-green-600 flex-shrink-0" />
+                                  )}
+                                </div>
+                                <p className="text-[10px] text-gray-500 mt-0.5">{new Date(review.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
                               </div>
                             </div>
-                            <div className={`bg-gradient-to-r ${getRatingColor(review.overall_rating)} px-3 py-1.5 rounded-lg flex items-center space-x-1.5 flex-shrink-0`}>
-                              <Star className="w-4 h-4 text-white fill-white" />
-                              <span className="font-bold text-sm text-white">{review.overall_rating.toFixed(1)}</span>
+                            {/* Rating Badge - Compact */}
+                            <div className={`bg-gradient-to-r ${getRatingColor(review.overall_rating)} px-2.5 py-1 rounded-md flex items-center space-x-1 flex-shrink-0`}>
+                              <Star className="w-3 h-3 text-white fill-white" />
+                              <span className="font-bold text-xs text-white">{review.overall_rating.toFixed(1)}</span>
                             </div>
                           </div>
 
                           {/* Review Text */}
-                          <p className="text-gray-700 mb-4 text-base leading-relaxed line-clamp-4">{reviewText}</p>
+                          <p className="text-gray-700 mb-2.5 text-xs leading-relaxed line-clamp-3">{reviewText}</p>
 
-                          {/* Review Images */}
+                          {/* Review Images - Fixed Height */}
                           {review.images && (
-                            <div className="mb-4">
+                            <div className="mb-2.5">
                               {(() => {
                                 // Handle both array and string cases
                                 let imageUrls: string[] = []
@@ -569,21 +702,36 @@ export default function LandlordPage() {
                                 if (imageUrls.length === 0) return null
                                 
                                 return (
-                                  <div className="grid grid-cols-3 gap-2">
-                                    {imageUrls.slice(0, 6).map((imageUrl, idx) => (
-                                      <div key={idx} className="relative aspect-square rounded-lg overflow-hidden bg-gray-100">
+                                  <div className="grid grid-cols-4 gap-1.5">
+                                    {imageUrls.slice(0, 4).map((imageUrl, idx) => (
+                                      <div key={idx} className="relative group h-16 rounded-md overflow-hidden bg-gray-100">
                                         <img
                                           src={imageUrl}
                                           alt={`Review image ${idx + 1}`}
-                                          className="w-full h-full object-cover hover:scale-105 transition-transform cursor-pointer"
+                                          className="w-full h-full object-cover hover:scale-110 transition-transform cursor-pointer"
+                                          onClick={() => setSelectedPhoto({
+                                            url: imageUrl,
+                                            reviewId: review.id,
+                                            userId: review.user_id,
+                                            displayName: displayName
+                                          })}
                                           onError={(e) => {
                                             console.error('❌ Failed to load image:', imageUrl)
                                             e.currentTarget.style.display = 'none'
                                           }}
-                                          onLoad={() => {
-                                            console.log('✅ Loaded image:', imageUrl)
-                                          }}
                                         />
+                                        {currentUser && currentUser.id !== review.user_id && (
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation()
+                                              handleReportPhoto(imageUrl, review.id, 'landlord')
+                                            }}
+                                            className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+                                            title="Report photo"
+                                          >
+                                            <Flag className="w-2.5 h-2.5" />
+                                          </button>
+                                        )}
                                       </div>
                                     ))}
                                   </div>
@@ -592,59 +740,58 @@ export default function LandlordPage() {
                             </div>
                           )}
 
-                          {/* Category Ratings */}
-                          <div className="grid grid-cols-5 gap-2 mb-4">
+                          {/* Category Ratings - Compact */}
+                          <div className="flex flex-wrap gap-1 mb-2 pt-2 border-t border-gray-100">
                             {(review.responsiveness || review.responsiveness_rating) && (
-                              <div className="flex flex-col items-center bg-blue-50 rounded-lg p-2">
-                                <MessageSquare className="w-3.5 h-3.5 text-blue-600 mb-1" />
-                                <span className="text-[10px] text-gray-600 text-center leading-tight font-medium">Res</span>
-                                <span className="font-bold text-xs text-gray-900">{(review.responsiveness || review.responsiveness_rating)}</span>
+                              <div className="flex items-center space-x-0.5 bg-gray-50 px-1.5 py-0.5 rounded">
+                                <span className="text-[9px] font-medium text-gray-600">Resp</span>
+                                <Star className="w-2 h-2 text-amber-400 fill-amber-400" />
+                                <span className={`text-[9px] font-bold ${getRatingTextColor(review.responsiveness || review.responsiveness_rating || 0)}`}>{(review.responsiveness || review.responsiveness_rating).toFixed(1)}</span>
                               </div>
                             )}
                             {(review.maintenance || review.maintenance_rating) && (
-                              <div className="flex flex-col items-center bg-green-50 rounded-lg p-2">
-                                <Wrench className="w-3.5 h-3.5 text-green-600 mb-1" />
-                                <span className="text-[10px] text-gray-600 text-center leading-tight font-medium">Maint</span>
-                                <span className="font-bold text-xs text-gray-900">{(review.maintenance || review.maintenance_rating)}</span>
+                              <div className="flex items-center space-x-0.5 bg-gray-50 px-1.5 py-0.5 rounded">
+                                <span className="text-[9px] font-medium text-gray-600">Maint</span>
+                                <Star className="w-2 h-2 text-amber-400 fill-amber-400" />
+                                <span className={`text-[9px] font-bold ${getRatingTextColor(review.maintenance || review.maintenance_rating || 0)}`}>{(review.maintenance || review.maintenance_rating).toFixed(1)}</span>
                               </div>
                             )}
                             {(review.communication || review.communication_rating) && (
-                              <div className="flex flex-col items-center bg-purple-50 rounded-lg p-2">
-                                <MessageSquare className="w-3.5 h-3.5 text-purple-600 mb-1" />
-                                <span className="text-[10px] text-gray-600 text-center leading-tight font-medium">Comm</span>
-                                <span className="font-bold text-xs text-gray-900">{(review.communication || review.communication_rating)}</span>
+                              <div className="flex items-center space-x-0.5 bg-gray-50 px-1.5 py-0.5 rounded">
+                                <span className="text-[9px] font-medium text-gray-600">Comm</span>
+                                <Star className="w-2 h-2 text-amber-400 fill-amber-400" />
+                                <span className={`text-[9px] font-bold ${getRatingTextColor(review.communication || review.communication_rating || 0)}`}>{(review.communication || review.communication_rating).toFixed(1)}</span>
                               </div>
                             )}
                             {(review.fairness || review.fairness_rating) && (
-                              <div className="flex flex-col items-center bg-yellow-50 rounded-lg p-2">
-                                <Scale className="w-3.5 h-3.5 text-yellow-600 mb-1" />
-                                <span className="text-[10px] text-gray-600 text-center leading-tight font-medium">Fair</span>
-                                <span className="font-bold text-xs text-gray-900">{(review.fairness || review.fairness_rating)}</span>
+                              <div className="flex items-center space-x-0.5 bg-gray-50 px-1.5 py-0.5 rounded">
+                                <span className="text-[9px] font-medium text-gray-600">Fair</span>
+                                <Star className="w-2 h-2 text-amber-400 fill-amber-400" />
+                                <span className={`text-[9px] font-bold ${getRatingTextColor(review.fairness || review.fairness_rating || 0)}`}>{(review.fairness || review.fairness_rating).toFixed(1)}</span>
                               </div>
                             )}
                             {(review.professionalism || review.professionalism_rating) && (
-                              <div className="flex flex-col items-center bg-indigo-50 rounded-lg p-2">
-                                <Briefcase className="w-3.5 h-3.5 text-indigo-600 mb-1" />
-                                <span className="text-[10px] text-gray-600 text-center leading-tight font-medium">Pro</span>
-                                <span className="font-bold text-xs text-gray-900">{(review.professionalism || review.professionalism_rating)}</span>
+                              <div className="flex items-center space-x-0.5 bg-gray-50 px-1.5 py-0.5 rounded">
+                                <span className="text-[9px] font-medium text-gray-600">Prof</span>
+                                <Star className="w-2 h-2 text-amber-400 fill-amber-400" />
+                                <span className={`text-[9px] font-bold ${getRatingTextColor(review.professionalism || review.professionalism_rating || 0)}`}>{(review.professionalism || review.professionalism_rating).toFixed(1)}</span>
                               </div>
                             )}
                           </div>
 
-                          {/* Additional Info */}
-                          <div className="flex flex-wrap gap-2 text-xs pt-4 border-t border-gray-200">
+                          {/* Additional Info - Compact */}
+                          <div className="flex flex-wrap gap-1.5 text-[10px] pt-2 border-t border-gray-100">
                             {review.years_rented && (
-                              <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded-full">Rented {review.years_rented}yr{review.years_rented !== 1 ? 's' : ''}</span>
+                              <span className="text-gray-600">Rented {review.years_rented}yr{review.years_rented !== 1 ? 's' : ''}</span>
                             )}
                             {review.monthly_rent && (
-                              <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded-full">${review.monthly_rent.toLocaleString()}/mo</span>
+                              <span className="text-gray-600">${review.monthly_rent.toLocaleString()}/mo</span>
                             )}
                             {review.would_recommend !== null && (
-                              <span className={`px-2 py-1 rounded-full flex items-center space-x-1 ${
+                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${
                                 review.would_recommend ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
                               }`}>
-                                {review.would_recommend ? <CheckCircle className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
-                                <span>{review.would_recommend ? 'Recommend' : 'Not recommend'}</span>
+                                {review.would_recommend ? '✓ Recommends' : '✗ No'}
                               </span>
                             )}
                           </div>
@@ -657,6 +804,82 @@ export default function LandlordPage() {
           </div>
         </div>
       </div>
+
+      {/* Photo Gallery Modal */}
+      {selectedPhoto && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 z-50 flex items-center justify-center p-4" onClick={() => setSelectedPhoto(null)}>
+          <div className="max-w-4xl w-full bg-white rounded-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="relative">
+              <img
+                src={selectedPhoto.url}
+                alt="Review photo"
+                className="w-full h-auto max-h-[80vh] object-contain"
+              />
+              <button
+                onClick={() => setSelectedPhoto(null)}
+                className="absolute top-4 right-4 bg-white rounded-full p-2 hover:bg-gray-100 transition-colors"
+              >
+                <XCircle className="w-6 h-6 text-gray-700" />
+              </button>
+            </div>
+            <div className="p-4 bg-gray-50 border-t border-gray-200">
+              <p className="text-sm text-gray-600">
+                Photo by <span className="font-semibold">{selectedPhoto.displayName}</span>
+              </p>
+              {currentUser && currentUser.id !== selectedPhoto.userId && (
+                <button
+                  onClick={() => {
+                    handleReportPhoto(selectedPhoto.url, selectedPhoto.reviewId, 'landlord')
+                    setSelectedPhoto(null)
+                  }}
+                  className="mt-2 text-sm text-red-600 hover:text-red-700 flex items-center space-x-1"
+                >
+                  <Flag className="w-4 h-4" />
+                  <span>Report this photo</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Photo Gallery Section */}
+      {allPhotos.length > 0 && (
+        <div className="max-w-[1600px] mx-auto px-6 py-8">
+          <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center space-x-2">
+            <ImageIcon className="w-6 h-6" />
+            <span>Photo Gallery</span>
+            <span className="text-lg text-gray-500 font-normal">({allPhotos.length} photos)</span>
+          </h2>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {allPhotos.map((photo, idx) => (
+              <div
+                key={idx}
+                className="relative aspect-square rounded-xl overflow-hidden bg-gray-100 cursor-pointer group"
+                onClick={() => setSelectedPhoto(photo)}
+              >
+                <img
+                  src={photo.url}
+                  alt={`Photo ${idx + 1}`}
+                  className="w-full h-full object-cover hover:scale-110 transition-transform"
+                />
+                {currentUser && currentUser.id !== photo.userId && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleReportPhoto(photo.url, photo.reviewId, 'landlord')
+                    }}
+                    className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1.5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+                    title="Report photo"
+                  >
+                    <Flag className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

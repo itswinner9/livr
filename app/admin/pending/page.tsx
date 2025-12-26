@@ -41,6 +41,15 @@ export default function PendingReviewsPage() {
 
       console.log('Raw building reviews:', bReviews?.length || 0, bError)
 
+      // Fetch landlord reviews
+      const { data: lReviews, error: lError } = await supabase
+        .from('landlord_reviews')
+        .select('*')
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false })
+
+      console.log('Raw landlord reviews:', lReviews?.length || 0, lError)
+
       const allReviews: any[] = []
 
       // Process neighborhood reviews
@@ -101,6 +110,43 @@ export default function PendingReviewsPage() {
         }
       }
 
+      // Process landlord reviews
+      if (lReviews && lReviews.length > 0) {
+        for (const review of lReviews) {
+          // Get landlord data
+          const { data: landlord } = await supabase
+            .from('landlords')
+            .select('*')
+            .eq('id', review.landlord_id)
+            .single()
+
+          // Get user data
+          const { data: userProfile } = await supabase
+            .from('user_profiles')
+            .select('email, full_name')
+            .eq('id', review.user_id)
+            .single()
+
+          if (landlord) {
+            const avgRating = (
+              (review.responsiveness || 0) + 
+              (review.maintenance || 0) + 
+              (review.communication || 0) + 
+              (review.fairness || 0) + 
+              (review.professionalism || 0)
+            ) / 5
+
+            allReviews.push({
+              ...review,
+              type: 'landlord',
+              location: landlord,
+              user: userProfile || { email: 'Unknown', full_name: 'Unknown' },
+              avg: avgRating
+            })
+          }
+        }
+      }
+
       console.log('✅ Total pending reviews processed:', allReviews.length)
       console.log('Reviews:', allReviews)
       
@@ -116,7 +162,10 @@ export default function PendingReviewsPage() {
   const handleApprove = async (reviewId: string, type: string) => {
     setActionLoading(reviewId)
     
-    const table = type === 'neighborhood' ? 'neighborhood_reviews' : 'building_reviews'
+    const table = 
+      type === 'neighborhood' ? 'neighborhood_reviews' : 
+      type === 'building' ? 'building_reviews' : 
+      'landlord_reviews'
     
     const { error } = await supabase
       .from(table)
@@ -142,7 +191,10 @@ export default function PendingReviewsPage() {
     
     const reason = prompt('Why are you rejecting this review? (Optional - will be shown to user)')
 
-    const table = type === 'neighborhood' ? 'neighborhood_reviews' : 'building_reviews'
+    const table = 
+      type === 'neighborhood' ? 'neighborhood_reviews' : 
+      type === 'building' ? 'building_reviews' : 
+      'landlord_reviews'
     
     const { error } = await supabase
       .from(table)
@@ -172,7 +224,40 @@ export default function PendingReviewsPage() {
   if (loading) {
     return (
       <div className="p-8">
-        <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-primary-500"></div>
+        <div className="mb-8">
+          <div className="h-10 bg-gray-200 rounded-xl w-64 mb-3 animate-pulse"></div>
+          <div className="h-6 bg-gray-200 rounded-lg w-80 animate-pulse"></div>
+        </div>
+
+        {/* Filter skeleton */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-6 p-2 inline-flex space-x-2 animate-pulse">
+          <div className="h-9 bg-gray-200 rounded-lg w-20"></div>
+          <div className="h-9 bg-gray-200 rounded-lg w-20"></div>
+          <div className="h-9 bg-gray-200 rounded-lg w-20"></div>
+        </div>
+
+        {/* Review cards skeleton */}
+        <div className="space-y-6">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="bg-white rounded-2xl p-6 shadow-lg border border-gray-200 animate-pulse">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center space-x-4">
+                  <div className="w-16 h-16 bg-gray-200 rounded-2xl"></div>
+                  <div>
+                    <div className="h-6 bg-gray-200 rounded w-48 mb-2"></div>
+                    <div className="h-4 bg-gray-200 rounded w-32"></div>
+                  </div>
+                </div>
+                <div className="h-8 bg-gray-200 rounded-full w-20"></div>
+              </div>
+              <div className="h-32 bg-gray-200 rounded-xl mb-4"></div>
+              <div className="flex space-x-4">
+                <div className="h-10 bg-gray-200 rounded-lg flex-1"></div>
+                <div className="h-10 bg-gray-200 rounded-lg flex-1"></div>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     )
   }
@@ -236,11 +321,18 @@ export default function PendingReviewsPage() {
                   <div className="flex items-center space-x-3 mb-2">
                     {review.type === 'neighborhood' ? (
                       <MapPin className="w-5 h-5 text-blue-600" />
+                    ) : review.type === 'landlord' ? (
+                      <Users className="w-5 h-5 text-purple-600" />
                     ) : (
                       <Building2 className="w-5 h-5 text-green-600" />
                     )}
                     <h3 className="text-xl font-bold text-gray-900">{review.location.name}</h3>
-                    <span className="text-sm text-gray-500">{review.location.city}</span>
+                    <span className="text-sm text-gray-500">
+                      {review.location.city}{review.location.province ? `, ${review.location.province}` : ''}
+                    </span>
+                    <span className="px-2 py-0.5 bg-purple-100 text-purple-700 text-xs font-semibold rounded">
+                      {review.type === 'landlord' ? 'Landlord' : review.type === 'neighborhood' ? 'Neighborhood' : 'Building'}
+                    </span>
                     {review.avg < 2 && (
                       <span className="bg-red-500 text-white px-3 py-1 rounded-full text-xs font-bold flex items-center space-x-1">
                         <AlertTriangle className="w-3 h-3" />

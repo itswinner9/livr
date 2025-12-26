@@ -222,3 +222,4 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- Success message
 SELECT 'SUCCESS! RLS ERROR FIXED! Users can now submit ratings without any restrictions.' as message;
 
+

@@ -1,862 +1,544 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, Suspense, useRef, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Search, Star, MapPin, Building2, Filter, UserCheck, Building, Grid, List, SortAsc, SortDesc, X, ChevronDown, Sparkles, TrendingUp, Award, Users, Clock } from 'lucide-react'
-import Link from 'next/link'
-import { supabase } from '@/lib/supabase'
-import type { Neighborhood, Building } from '@/lib/supabase'
-import SearchAutocomplete from '@/components/SearchAutocomplete'
-import SuccessNotification from '@/components/SuccessNotification'
-import RatingCard from '@/components/RatingCard'
+import { Search, MapPin, SlidersHorizontal, X, ChevronLeft, ChevronRight, Star } from 'lucide-react'
+import PropertyCard from '@/components/PropertyCard'
 
 function ExploreContent() {
   const searchParams = useSearchParams()
   const initialQuery = searchParams.get('q') || ''
   const initialType = searchParams.get('type') || 'all'
-  const showSuccess = searchParams.get('success') === 'true'
-  const showPending = searchParams.get('success') === 'pending'
 
   const [searchQuery, setSearchQuery] = useState(initialQuery)
-  const [activeTab, setActiveTab] = useState<'all' | 'neighborhoods' | 'buildings' | 'landlords' | 'rent-companies'>(
-    initialType as any || 'all'
-  )
-  const [neighborhoods, setNeighborhoods] = useState<Neighborhood[]>([])
-  const [buildings, setBuildings] = useState<Building[]>([])
+  const [isClient, setIsClient] = useState(false)
+  const [neighborhoods, setNeighborhoods] = useState<any[]>([])
+  const [buildings, setBuildings] = useState<any[]>([])
   const [landlords, setLandlords] = useState<any[]>([])
   const [rentCompanies, setRentCompanies] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [showNotification, setShowNotification] = useState(showSuccess)
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
-  const [sortBy, setSortBy] = useState<'rating' | 'reviews' | 'newest'>('rating')
+  const [currentPage, setCurrentPage] = useState(1)
   const [showFilters, setShowFilters] = useState(false)
+  const itemsPerPage = 24
+  
   const [filters, setFilters] = useState({
-    minRating: 0,
+    category: initialType || 'all',
+    sortBy: 'rating' as 'rating' | 'reviews' | 'newest' | 'lowest',
+    ratingMin: 0,
     hasReviews: false,
-    city: '',
-    province: ''
+    multipleReviews: false,
+    location: '',
   })
 
-  useEffect(() => {
-    fetchData()
-  }, [searchQuery, activeTab, sortBy, filters])
+  const searchDebounceTimer = useRef<NodeJS.Timeout>()
+  const abortControllerRef = useRef<AbortController>()
 
-  const fetchData = async () => {
+  useEffect(() => {
+    setIsClient(true)
+  }, [])
+
+  const fetchData = useCallback(async () => {
+    // Cancel previous request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+    abortControllerRef.current = new AbortController()
+
     setLoading(true)
 
     try {
-      if (activeTab === 'all' || activeTab === 'neighborhoods') {
-        let query = supabase
-          .from('neighborhoods')
-          .select('*')
+      // Build query params
+      const params = new URLSearchParams({
+        category: filters.category,
+        q: searchQuery,
+        location: filters.location,
+        ratingMin: filters.ratingMin.toString(),
+        hasReviews: filters.hasReviews.toString(),
+        multipleReviews: filters.multipleReviews.toString(),
+        sortBy: filters.sortBy,
+      })
 
-        // Apply search filter
-        if (searchQuery && searchQuery.trim()) {
-          query = query.or(`name.ilike.%${searchQuery}%,city.ilike.%${searchQuery}%,province.ilike.%${searchQuery}%`)
-        }
+      const response = await fetch(`/api/explore?${params.toString()}`, {
+        signal: abortControllerRef.current.signal,
+      })
 
-        // Apply additional filters
-        if (filters.minRating > 0) {
-          query = query.gte('overall_rating', filters.minRating)
+      if (!response.ok) {
+        if (response.status === 504) {
+          console.error('Request timed out')
+          setLoading(false)
+          return
         }
-        if (filters.hasReviews) {
-          query = query.gt('total_reviews', 0)
-        }
-        if (filters.city) {
-          query = query.ilike('city', `%${filters.city}%`)
-        }
-        if (filters.province) {
-          query = query.ilike('province', `%${filters.province}%`)
-        }
-
-        // Apply sorting
-        if (sortBy === 'rating') {
-          query = query.order('overall_rating', { ascending: false })
-        } else if (sortBy === 'reviews') {
-          query = query.order('total_reviews', { ascending: false })
-        } else if (sortBy === 'newest') {
-          query = query.order('created_at', { ascending: false })
-        }
-
-        const { data, error } = await query
-        
-        if (error) {
-          console.error('Error fetching neighborhoods:', error)
-          setNeighborhoods([])
-        } else {
-          console.log('Fetched neighborhoods:', data?.length || 0)
-          setNeighborhoods(data || [])
-        }
+        throw new Error('Failed to fetch data')
       }
 
-      if (activeTab === 'all' || activeTab === 'buildings') {
-        let query = supabase
-          .from('buildings')
-          .select('*')
-
-        if (searchQuery && searchQuery.trim()) {
-          query = query.or(`name.ilike.%${searchQuery}%,address.ilike.%${searchQuery}%,city.ilike.%${searchQuery}%,province.ilike.%${searchQuery}%`)
-        }
-
-        // Apply sorting
-        if (sortBy === 'rating') {
-          query = query.order('overall_rating', { ascending: false })
-        } else if (sortBy === 'reviews') {
-          query = query.order('total_reviews', { ascending: false })
-        } else if (sortBy === 'newest') {
-          query = query.order('created_at', { ascending: false })
-        }
-
-        const { data, error } = await query
-        
-        if (error) {
-          console.error('Error fetching buildings:', error)
-          setBuildings([])
-        } else {
-          console.log('Fetched buildings:', data?.length || 0)
-          setBuildings(data || [])
-        }
+      const data = await response.json()
+      setNeighborhoods(data.neighborhoods || [])
+      setBuildings(data.buildings || [])
+      setLandlords(data.landlords || [])
+      setRentCompanies(data.rentCompanies || [])
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        return // Request was cancelled
       }
-
-      if (activeTab === 'all' || activeTab === 'landlords') {
-        let query = supabase
-          .from('landlords')
-          .select('*')
-
-        if (searchQuery && searchQuery.trim()) {
-          query = query.or(`name.ilike.%${searchQuery}%,company_name.ilike.%${searchQuery}%,city.ilike.%${searchQuery}%,province.ilike.%${searchQuery}%`)
-        }
-
-        // Apply sorting
-        if (sortBy === 'rating') {
-          query = query.order('overall_rating', { ascending: false })
-        } else if (sortBy === 'reviews') {
-          query = query.order('total_reviews', { ascending: false })
-        } else if (sortBy === 'newest') {
-          query = query.order('created_at', { ascending: false })
-        }
-
-        const { data, error } = await query
-        
-        if (error) {
-          console.error('Error fetching landlords:', error)
-          setLandlords([])
-        } else {
-          console.log('Fetched landlords:', data?.length || 0)
-          setLandlords(data || [])
-        }
-      }
-
-      if (activeTab === 'all' || activeTab === 'rent-companies') {
-        let query = supabase
-          .from('rent_companies')
-          .select('*')
-
-        if (searchQuery && searchQuery.trim()) {
-          query = query.or(`name.ilike.%${searchQuery}%,city.ilike.%${searchQuery}%,province.ilike.%${searchQuery}%`)
-        }
-
-        // Apply sorting
-        if (sortBy === 'rating') {
-          query = query.order('overall_rating', { ascending: false })
-        } else if (sortBy === 'reviews') {
-          query = query.order('total_reviews', { ascending: false })
-        } else if (sortBy === 'newest') {
-          query = query.order('created_at', { ascending: false })
-        }
-
-        const { data, error } = await query
-        
-        if (error) {
-          console.error('Error fetching rent companies:', error)
-          setRentCompanies([])
-        } else {
-          console.log('Fetched rent companies:', data?.length || 0)
-          setRentCompanies(data || [])
-        }
-      }
-    } catch (error) {
-      console.error('Error in fetchData:', error)
+      console.error('Error fetching data:', error)
       setNeighborhoods([])
       setBuildings([])
       setLandlords([])
       setRentCompanies([])
+    } finally {
+      setLoading(false)
+    }
+  }, [filters, searchQuery])
+
+  useEffect(() => {
+    if (isClient) {
+      if (searchDebounceTimer.current) {
+        clearTimeout(searchDebounceTimer.current)
+      }
+
+      searchDebounceTimer.current = setTimeout(() => {
+        fetchData()
+        setCurrentPage(1)
+      }, 300)
+
+      return () => {
+        if (searchDebounceTimer.current) {
+          clearTimeout(searchDebounceTimer.current)
+        }
+      }
+    }
+  }, [isClient, searchQuery, filters, fetchData])
+
+  const getAllResults = () => {
+    let results: any[] = []
+    
+    if (filters.category === 'all') {
+      results = [
+        ...neighborhoods.map(item => ({ ...item, type: 'neighborhood' })),
+        ...buildings.map(item => ({ ...item, type: 'building' })),
+        ...landlords.map(item => ({ ...item, type: 'landlord' })),
+        ...rentCompanies.map(item => ({ ...item, type: 'rent-company' }))
+      ]
+    } else if (filters.category === 'neighborhoods') {
+      results = neighborhoods.map(item => ({ ...item, type: 'neighborhood' }))
+    } else if (filters.category === 'buildings') {
+      results = buildings.map(item => ({ ...item, type: 'building' }))
+    } else if (filters.category === 'landlords') {
+      results = landlords.map(item => ({ ...item, type: 'landlord' }))
+    } else if (filters.category === 'companies') {
+      results = rentCompanies.map(item => ({ ...item, type: 'rent-company' }))
     }
 
-    setLoading(false)
-  }
-
-  const handleSearch = (query: string, data?: any) => {
-    setSearchQuery(query)
-  }
-
-  const totalCount = (activeTab === 'all' ? neighborhoods.length + buildings.length + landlords.length + rentCompanies.length : 
-                      activeTab === 'neighborhoods' ? neighborhoods.length : 
-                      activeTab === 'buildings' ? buildings.length :
-                      activeTab === 'landlords' ? landlords.length : rentCompanies.length)
-
-  const clearFilters = () => {
-    setFilters({
-      minRating: 0,
-      hasReviews: false,
-      city: '',
-      province: ''
+    // Apply sorting
+    results.sort((a, b) => {
+      switch (filters.sortBy) {
+        case 'rating':
+          const ratingA = a.overall_rating || a.average_rating || 0
+          const ratingB = b.overall_rating || b.average_rating || 0
+          if (ratingB !== ratingA) return ratingB - ratingA
+          return (b.total_reviews || 0) - (a.total_reviews || 0)
+        case 'reviews':
+          return (b.total_reviews || 0) - (a.total_reviews || 0)
+        case 'newest':
+          return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime()
+        case 'lowest':
+          const lowA = a.overall_rating || a.average_rating || 0
+          const lowB = b.overall_rating || b.average_rating || 0
+          return lowA - lowB
+        default:
+          return 0
+      }
     })
-    setSearchQuery('')
+
+    return results
   }
 
-  const getSortIcon = () => {
-    switch (sortBy) {
-      case 'rating': return <Star className="w-4 h-4" />
-      case 'reviews': return <Users className="w-4 h-4" />
-      case 'newest': return <Clock className="w-4 h-4" />
-      default: return <Star className="w-4 h-4" />
+  const results = getAllResults()
+  
+  // Pagination calculations
+  const totalPages = Math.ceil(results.length / itemsPerPage)
+  const startIndex = (currentPage - 1) * itemsPerPage
+  const endIndex = startIndex + itemsPerPage
+  const paginatedResults = results.slice(startIndex, endIndex)
+
+  // Generate page numbers for pagination
+  const getPageNumbers = () => {
+    const pages: (number | string)[] = []
+    const maxVisible = 7
+
+    if (totalPages <= maxVisible) {
+      return Array.from({ length: totalPages }, (_, i) => i + 1)
     }
+
+    pages.push(1)
+
+    if (currentPage > 3) {
+      pages.push('...')
+    }
+
+    const start = Math.max(2, currentPage - 1)
+    const end = Math.min(totalPages - 1, currentPage + 1)
+
+    for (let i = start; i <= end; i++) {
+      pages.push(i)
+    }
+
+    if (currentPage < totalPages - 2) {
+      pages.push('...')
+    }
+
+    pages.push(totalPages)
+
+    return pages
   }
 
-  const getSortLabel = () => {
-    switch (sortBy) {
-      case 'rating': return 'Highest Rated'
-      case 'reviews': return 'Most Reviews'
-      case 'newest': return 'Newest First'
-      default: return 'Highest Rated'
-    }
+  if (!isClient) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white flex items-center justify-center">
+        <div className="w-16 h-16 border-4 border-primary-200 rounded-full animate-spin border-t-primary-600"></div>
+        </div>
+    )
   }
+
+  const categoryOptions = [
+    { value: 'all', label: 'All' },
+    { value: 'neighborhoods', label: 'Neighborhoods' },
+    { value: 'buildings', label: 'Buildings' },
+    { value: 'landlords', label: 'Landlords' },
+    { value: 'companies', label: 'Companies' }
+  ]
+
+  const sortOptions = [
+    { value: 'rating', label: 'Highest Rated' },
+    { value: 'reviews', label: 'Most Reviews' },
+    { value: 'newest', label: 'Newest First' },
+    { value: 'lowest', label: 'Lowest Rated' },
+  ]
+
+  const activeFiltersCount = [
+    filters.ratingMin > 0,
+    filters.hasReviews,
+    filters.multipleReviews,
+    filters.location.trim() !== '',
+  ].filter(Boolean).length
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
-      <SuccessNotification
-        show={showNotification}
-        message="Your rating is now live and visible to everyone. Check it out below!"
-        onClose={() => setShowNotification(false)}
-      />
-      
-      {showPending && (
-        <div className="fixed top-4 right-4 z-50 bg-yellow-50 border border-yellow-200 rounded-lg p-4 shadow-lg max-w-md animate-slide-in-right">
-          <div className="flex items-start">
-            <div className="flex-shrink-0">
-              <Clock className="w-5 h-5 text-yellow-600" />
-            </div>
-            <div className="ml-3">
-              <h3 className="text-sm font-medium text-yellow-800">Review Submitted</h3>
-              <p className="text-sm text-yellow-700 mt-1">
-                Your review is pending admin approval. You'll be notified once it's approved.
-              </p>
-            </div>
-            <button
-              onClick={() => window.history.replaceState({}, '', window.location.pathname)}
-              className="ml-4 text-yellow-400 hover:text-yellow-600"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
-      
-      <div className="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
-        {/* Compact Modern Hero Header */}
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h1 className="text-2xl lg:text-3xl font-black text-gray-900 mb-1">
-                Explore <span className="bg-gradient-to-r from-primary-500 via-blue-500 to-purple-600 bg-clip-text text-transparent">{totalCount.toLocaleString()}</span> Locations
-              </h1>
-              <p className="text-sm text-gray-600">
-                Real reviews from real people
-              </p>
-            </div>
-            <div className="flex items-center space-x-2 text-xs font-medium text-gray-500">
-              <Sparkles className="w-4 h-4" />
-              <span>Verified Reviews</span>
-            </div>
-          </div>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-12">
+        {/* Header */}
+        <div className="text-center mb-8 lg:mb-12">
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-gray-900 mb-3">
+            Explore Properties
+          </h1>
+          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+            Discover top-rated neighborhoods, buildings, and landlords
+          </p>
         </div>
 
-                {/* Compact Enhanced Search & Filter Bar */}
-        <div className="bg-white rounded-2xl shadow-lg p-4 lg:p-5 mb-6 border border-gray-100">
-          {/* Search Bar */}
-          <div className="mb-4">
-            <div className="relative">
-              <div className="bg-gray-50 rounded-xl p-2 border border-gray-200 focus-within:border-primary-500 focus-within:ring-2 focus-within:ring-primary-100 transition-all">
-                <SearchAutocomplete
-                  onLocationSelect={handleSearch}
-                  placeholder="Search locations, buildings, landlords..."
-                  showIcon={true}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Compact Modern Tabs with Icons */}
-          <div className="flex flex-wrap gap-2 mb-4">
-            <button
-              onClick={() => setActiveTab('all')}
-              className={`group relative px-4 py-2.5 rounded-xl font-semibold text-sm transition-all duration-300 flex items-center space-x-2 ${
-                activeTab === 'all'
-                  ? 'bg-gradient-to-r from-primary-500 to-blue-500 text-white shadow-md'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              <TrendingUp className="w-4 h-4" />
-              <span>All</span>
-              <div className={`text-xs px-2 py-0.5 rounded-full font-bold ${
-                activeTab === 'all' ? 'bg-white/20' : 'bg-gray-200 text-gray-700'
-              }`}>
-                {neighborhoods.length + buildings.length + landlords.length + rentCompanies.length}
-              </div>
-            </button>
-            
-            <button
-              onClick={() => setActiveTab('neighborhoods')}
-              className={`group relative px-4 py-2.5 rounded-xl font-semibold text-sm transition-all duration-300 flex items-center space-x-2 ${
-                activeTab === 'neighborhoods'
-                  ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              <MapPin className="w-4 h-4" />
-              <span>Neighborhoods</span>
-              <div className={`text-xs px-2 py-0.5 rounded-full font-bold ${
-                activeTab === 'neighborhoods' ? 'bg-white/20' : 'bg-blue-100 text-blue-600'
-              }`}>
-                {neighborhoods.length}
-              </div>
-            </button>
-            
-            <button
-              onClick={() => setActiveTab('buildings')}
-              className={`group relative px-4 py-2.5 rounded-xl font-semibold text-sm transition-all duration-300 flex items-center space-x-2 ${
-                activeTab === 'buildings'
-                  ? 'bg-gradient-to-r from-green-500 to-green-600 text-white shadow-md'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              <Building2 className="w-4 h-4" />
-              <span>Buildings</span>
-              <div className={`text-xs px-2 py-0.5 rounded-full font-bold ${
-                activeTab === 'buildings' ? 'bg-white/20' : 'bg-green-100 text-green-600'
-              }`}>
-                {buildings.length}
-              </div>
-            </button>
-            
-            <button
-              onClick={() => setActiveTab('landlords')}
-              className={`group relative px-4 py-2.5 rounded-xl font-semibold text-sm transition-all duration-300 flex items-center space-x-2 ${
-                activeTab === 'landlords'
-                  ? 'bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-md'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              <UserCheck className="w-4 h-4" />
-              <span>Landlords</span>
-              <div className={`text-xs px-2 py-0.5 rounded-full font-bold ${
-                activeTab === 'landlords' ? 'bg-white/20' : 'bg-purple-100 text-purple-600'
-              }`}>
-                {landlords.length}
-              </div>
-            </button>
-            
-            <button
-              onClick={() => setActiveTab('rent-companies')}
-              className={`group relative px-4 py-2.5 rounded-xl font-semibold text-sm transition-all duration-300 flex items-center space-x-2 ${
-                activeTab === 'rent-companies'
-                  ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-md'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              <Building className="w-4 h-4" />
-              <span>Rent Companies</span>
-              <div className={`text-xs px-2 py-0.5 rounded-full font-bold ${
-                activeTab === 'rent-companies' ? 'bg-white/20' : 'bg-orange-100 text-orange-600'
-              }`}>
-                {rentCompanies.length}
-              </div>
-            </button>
-          </div>
-
-          {/* Compact Controls Bar */}
-          <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-gray-200">
-            <div className="flex items-center space-x-2">
-              {/* View Mode Toggle */}
-              <div className="flex items-center bg-gray-100 rounded-lg p-0.5">
-                <button
-                  onClick={() => setViewMode('grid')}
-                  className={`p-1.5 rounded-md transition-all ${
-                    viewMode === 'grid' ? 'bg-white shadow-sm text-primary-600' : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                  title="Grid view"
-                >
-                  <Grid className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={() => setViewMode('list')}
-                  className={`p-1.5 rounded-md transition-all ${
-                    viewMode === 'list' ? 'bg-white shadow-sm text-primary-600' : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                  title="List view"
-                >
-                  <List className="w-3.5 h-3.5" />
-                </button>
-              </div>
-
-              {/* Sort Dropdown */}
-              <div className="relative">
-                <button
-                  onClick={() => setSortBy(sortBy === 'rating' ? 'reviews' : sortBy === 'reviews' ? 'newest' : 'rating')}
-                  className="flex items-center space-x-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-xs font-medium text-gray-700 transition-all"
-                  title="Sort options"
-                >
-                  {getSortIcon()}
-                  <span>{getSortLabel()}</span>
-                  <ChevronDown className="w-3 h-3" />
-                </button>
-              </div>
-            </div>
-
-            <div className="flex items-center space-x-2">
-              {/* Filter Toggle */}
+        {/* Search Bar */}
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-4 sm:p-6 mb-6 max-w-4xl mx-auto">
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by name, city, or location..."
+              className="w-full pl-12 pr-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all text-base"
+              style={{ fontSize: '16px' }}
+            />
+            {searchQuery && (
               <button
-                onClick={() => setShowFilters(!showFilters)}
-                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                  showFilters ? 'bg-primary-100 text-primary-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                onClick={() => setSearchQuery('')}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            )}
+          </div>
+
+          {/* Category Filter */}
+          <div className="flex flex-wrap justify-center gap-2 mt-4">
+            {categoryOptions.map((option) => (
+              <button
+                key={option.value}
+                onClick={() => {
+                  setFilters({ ...filters, category: option.value })
+                  setCurrentPage(1)
+                }}
+                className={`px-4 py-2 rounded-xl font-bold text-sm transition-all ${
+                  filters.category === option.value
+                    ? 'bg-gradient-to-r from-primary-600 to-orange-600 text-white shadow-lg scale-105'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
               >
-                <Filter className="w-3.5 h-3.5" />
-                <span>Filters</span>
+                {option.label}
               </button>
+            ))}
+          </div>
+        </div>
 
-              {/* Clear Filters */}
-              {(searchQuery || filters.minRating > 0 || filters.hasReviews || filters.city || filters.province) && (
+        {/* Filters and Sort Bar */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* Sort Dropdown */}
+            <select
+              value={filters.sortBy}
+              onChange={(e) => {
+                setFilters({ ...filters, sortBy: e.target.value as any })
+                setCurrentPage(1)
+              }}
+              className="px-4 py-2.5 bg-white border border-gray-300 rounded-xl text-sm font-medium focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none shadow-sm hover:border-primary-300 transition-colors"
+            >
+              {sortOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+
+            {/* Filter Toggle Button */}
                 <button
-                  onClick={clearFilters}
-                  className="flex items-center space-x-1.5 px-3 py-1.5 bg-red-100 text-red-700 hover:bg-red-200 rounded-lg text-xs font-medium transition-all"
-                >
-                  <X className="w-3.5 h-3.5" />
-                  <span>Clear</span>
+              onClick={() => setShowFilters(!showFilters)}
+              className={`px-4 py-2.5 bg-white border rounded-xl text-sm font-medium flex items-center gap-2 transition-all shadow-sm ${
+                showFilters || activeFiltersCount > 0
+                  ? 'border-primary-500 text-primary-600 bg-primary-50'
+                  : 'border-gray-300 text-gray-700 hover:border-primary-300'
+              }`}
+            >
+              <SlidersHorizontal className="w-4 h-4" />
+              Filters
+              {activeFiltersCount > 0 && (
+                <span className="bg-primary-600 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                  {activeFiltersCount}
+                    </span>
+                  )}
                 </button>
-              )}
+                
+            {/* Results Count */}
+            <div className="text-sm text-gray-600 font-medium">
+              {results.length.toLocaleString()} {results.length === 1 ? 'result' : 'results'}
             </div>
           </div>
 
-          {/* Compact Advanced Filters Panel */}
-          {showFilters && (
-            <div className="mt-4 p-4 bg-gray-50 rounded-xl border border-gray-200">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1.5">Min Rating</label>
-                  <select
-                    value={filters.minRating}
-                    onChange={(e) => setFilters({...filters, minRating: Number(e.target.value)})}
-                    className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                  >
-                    <option value={0}>Any Rating</option>
-                    <option value={1}>1+ Stars</option>
-                    <option value={2}>2+ Stars</option>
-                    <option value={3}>3+ Stars</option>
-                    <option value={4}>4+ Stars</option>
-                    <option value={4.5}>4.5+ Stars</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1.5">City</label>
-                  <input
-                    type="text"
-                    value={filters.city}
-                    onChange={(e) => setFilters({...filters, city: e.target.value})}
-                    placeholder="Enter city..."
-                    className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1.5">Province</label>
-                  <select
-                    value={filters.province}
-                    onChange={(e) => setFilters({...filters, province: e.target.value})}
-                    className="w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                  >
-                    <option value="">Any Province</option>
-                    <option value="Ontario">Ontario</option>
-                    <option value="Quebec">Quebec</option>
-                    <option value="British Columbia">British Columbia</option>
-                    <option value="Alberta">Alberta</option>
-                    <option value="Manitoba">Manitoba</option>
-                    <option value="Saskatchewan">Saskatchewan</option>
-                    <option value="Nova Scotia">Nova Scotia</option>
-                    <option value="New Brunswick">New Brunswick</option>
-                    <option value="Newfoundland and Labrador">Newfoundland and Labrador</option>
-                    <option value="Prince Edward Island">Prince Edward Island</option>
-                    <option value="Northwest Territories">Northwest Territories</option>
-                    <option value="Nunavut">Nunavut</option>
-                    <option value="Yukon">Yukon</option>
-                  </select>
-                </div>
-                <div className="flex items-end">
-                  <label className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      checked={filters.hasReviews}
-                      onChange={(e) => setFilters({...filters, hasReviews: e.target.checked})}
-                      className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
-                    />
-                    <span className="text-sm font-medium text-gray-700">Has Reviews Only</span>
-                  </label>
-                </div>
-              </div>
+          {loading && (
+            <div className="flex items-center text-sm font-medium text-primary-600">
+              <div className="w-4 h-4 border-2 border-primary-300 rounded-full animate-spin border-t-primary-600 mr-2"></div>
+              Loading...
             </div>
           )}
         </div>
 
-        {loading ? (
-          <div className="text-center py-16">
-            <div className="inline-flex flex-col items-center space-y-4">
-              <div className="relative">
-                <div className="w-16 h-16 border-4 border-primary-200 rounded-full animate-spin"></div>
-                <div className="absolute top-0 left-0 w-16 h-16 border-4 border-transparent border-t-primary-500 rounded-full animate-spin"></div>
+        {/* Advanced Filters Panel */}
+        {showFilters && (
+          <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-6 mb-6 animate-fade-in">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Rating Filter */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-3">
+                  Minimum Rating: {filters.ratingMin.toFixed(1)} ⭐
+                </label>
+                    <input
+                  type="range"
+                  min="0"
+                  max="5"
+                  step="0.5"
+                  value={filters.ratingMin}
+                  onChange={(e) => {
+                    setFilters({ ...filters, ratingMin: parseFloat(e.target.value) })
+                    setCurrentPage(1)
+                  }}
+                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-600"
+                />
+                <div className="flex justify-between text-xs text-gray-500 mt-1">
+                  <span>0</span>
+                  <span>5</span>
+                </div>
               </div>
-              <div className="text-center">
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">Finding the best places for you...</h3>
-                <p className="text-gray-600">Searching through our database</p>
+
+              {/* Location Filter */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-3">
+                  Location
+                </label>
+                <input
+                  type="text"
+                  value={filters.location}
+                  onChange={(e) => {
+                    setFilters({ ...filters, location: e.target.value })
+                    setCurrentPage(1)
+                  }}
+                  placeholder="City or province..."
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
+                />
+              </div>
+
+              {/* Boolean Filters */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-3">
+                  Options
+                </label>
+                <div className="space-y-2">
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={filters.hasReviews}
+                      onChange={(e) => {
+                        setFilters({ ...filters, hasReviews: e.target.checked })
+                        setCurrentPage(1)
+                      }}
+                      className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                    />
+                    <span className="text-sm text-gray-700">Has Reviews</span>
+                  </label>
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={filters.multipleReviews}
+                      onChange={(e) => {
+                        setFilters({ ...filters, multipleReviews: e.target.checked })
+                        setCurrentPage(1)
+                      }}
+                      className="w-4 h-4 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                    />
+                    <span className="text-sm text-gray-700">3+ Reviews</span>
+                  </label>
+                </div>
               </div>
             </div>
+
+            {/* Clear Filters */}
+            {activeFiltersCount > 0 && (
+              <div className="mt-6 pt-6 border-t border-gray-200">
+                    <button 
+                  onClick={() => {
+                    setFilters({
+                      category: filters.category,
+                      sortBy: 'rating',
+                      ratingMin: 0,
+                      hasReviews: false,
+                      multipleReviews: false,
+                      location: '',
+                    })
+                    setCurrentPage(1)
+                  }}
+                  className="text-sm text-primary-600 hover:text-primary-700 font-medium flex items-center gap-2"
+                >
+                  <X className="w-4 h-4" />
+                  Clear all filters
+                </button>
+              </div>
+            )}
           </div>
-        ) : (
+        )}
+
+        {/* Results Grid */}
+            {loading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {Array.from({ length: itemsPerPage }).map((_, i) => (
+              <div key={i} className="bg-white rounded-2xl border border-gray-200 overflow-hidden animate-pulse">
+                <div className="h-64 bg-gray-200"></div>
+                <div className="p-6">
+                  <div className="h-4 bg-gray-200 rounded w-3/4 mb-3"></div>
+                  <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                </div>
+              </div>
+            ))}
+              </div>
+            ) : results.length > 0 ? (
           <>
-            {/* Neighborhoods */}
-            {(activeTab === 'all' || activeTab === 'neighborhoods') && neighborhoods.length > 0 && (
-              <section className="mb-12">
-                <div className="flex items-center justify-between mb-8">
-                  <div className="flex items-center space-x-4">
-                    <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center shadow-lg">
-                      <MapPin className="w-6 h-6 text-white" />
-                    </div>
-                    <div>
-                      <h2 className="text-2xl lg:text-3xl font-bold text-gray-900">
-                        {activeTab === 'all' ? 'Neighborhoods' : 'Results'}
-                      </h2>
-                      <p className="text-gray-600 flex items-center space-x-2">
-                        <span>{neighborhoods.length} location{neighborhoods.length !== 1 ? 's' : ''} found</span>
-                        <span className="text-gray-400">•</span>
-                        <span className="text-sm text-gray-500">Sorted by {getSortLabel().toLowerCase()}</span>
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-2 text-sm text-gray-500">
-                    <Award className="w-4 h-4" />
-                    <span>Top Rated</span>
-                  </div>
-                </div>
-                <div className={`${viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6' : 'space-y-4'}`}>
-                  {neighborhoods.map((neighborhood) => (
-                    <RatingCard key={neighborhood.id} rating={neighborhood} type="neighborhood" viewMode={viewMode} />
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {/* Buildings */}
-            {(activeTab === 'all' || activeTab === 'buildings') && buildings.length > 0 && (
-              <section className="mb-12">
-                <div className="flex items-center justify-between mb-8">
-                  <div className="flex items-center space-x-4">
-                    <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-green-600 rounded-2xl flex items-center justify-center shadow-lg">
-                      <Building2 className="w-6 h-6 text-white" />
-                    </div>
-                    <div>
-                      <h2 className="text-2xl lg:text-3xl font-bold text-gray-900">
-                        {activeTab === 'all' ? 'Buildings' : 'Results'}
-                      </h2>
-                      <p className="text-gray-600 flex items-center space-x-2">
-                        <span>{buildings.length} location{buildings.length !== 1 ? 's' : ''} found</span>
-                        <span className="text-gray-400">•</span>
-                        <span className="text-sm text-gray-500">Sorted by {getSortLabel().toLowerCase()}</span>
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-2 text-sm text-gray-500">
-                    <Award className="w-4 h-4" />
-                    <span>Top Rated</span>
-                  </div>
-                </div>
-                <div className={`${viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6' : 'space-y-4'}`}>
-                  {buildings.map((building) => (
-                    <RatingCard key={building.id} rating={building} type="building" viewMode={viewMode} />
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {/* Landlords */}
-            {(activeTab === 'all' || activeTab === 'landlords') && landlords.length > 0 && (
-              <section className="mb-12">
-                <div className="flex items-center justify-between mb-8">
-                  <div className="flex items-center space-x-4">
-                    <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg">
-                      <UserCheck className="w-6 h-6 text-white" />
-                    </div>
-                    <div>
-                      <h2 className="text-2xl lg:text-3xl font-bold text-gray-900">
-                        {activeTab === 'all' ? 'Landlords' : 'Results'}
-                      </h2>
-                      <p className="text-gray-600 flex items-center space-x-2">
-                        <span>{landlords.length} landlord{landlords.length !== 1 ? 's' : ''} found</span>
-                        <span className="text-gray-400">•</span>
-                        <span className="text-sm text-gray-500">Sorted by {getSortLabel().toLowerCase()}</span>
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-2 text-sm text-gray-500">
-                    <Award className="w-4 h-4" />
-                    <span>Top Rated</span>
-                  </div>
-                </div>
-                <div className={`${viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6' : 'space-y-4'}`}>
-                  {landlords.map((landlord) => (
-                    <Link key={landlord.id} href={`/landlord/${landlord.id}`}>
-                      <div className={`bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-200 hover:border-purple-200 ${
-                        viewMode === 'list' ? 'p-6 flex items-center space-x-6' : 'p-6'
-                      }`}>
-                        <div className={`${viewMode === 'list' ? 'flex-1' : 'flex items-start justify-between mb-4'}`}>
-                          <div className="flex-1">
-                            <h3 className="text-lg font-semibold text-gray-900 mb-1">{landlord.name}</h3>
-                            {landlord.company_name && (
-                              <p className="text-sm text-gray-600 mb-2">{landlord.company_name}</p>
-                            )}
-                            <p className="text-sm text-gray-500 flex items-center">
-                              <MapPin className="w-4 h-4 mr-1" />
-                              {landlord.city}, {landlord.province}
-                            </p>
-                            {landlord.description && (
-                              <p className="text-sm text-gray-600 line-clamp-2 mt-2">{landlord.description}</p>
-                            )}
-                          </div>
-                          <div className={`text-right ${viewMode === 'list' ? 'ml-4' : ''}`}>
-                            <div className="text-2xl font-bold text-gray-900">{(landlord.overall_rating || 0).toFixed(1)}</div>
-                            <div className="flex items-center">
-                              {[1, 2, 3, 4, 5].map((star) => (
-                                <Star
-                                  key={star}
-                                  className={`w-4 h-4 ${
-                                    star <= (landlord.overall_rating || 0) ? 'text-yellow-400 fill-current' : 'text-gray-300'
-                                  }`}
-                                />
-                              ))}
-                            </div>
-                            <div className="text-xs text-gray-500 mt-1">
-                              {landlord.total_reviews || 0} review{(landlord.total_reviews || 0) !== 1 ? 's' : ''}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {/* Rent Companies */}
-            {(activeTab === 'all' || activeTab === 'rent-companies') && rentCompanies.length > 0 && (
-              <section className="mb-12">
-                <div className="flex items-center justify-between mb-8">
-                  <div className="flex items-center space-x-4">
-                    <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl flex items-center justify-center shadow-lg">
-                      <Building className="w-6 h-6 text-white" />
-                    </div>
-                    <div>
-                      <h2 className="text-2xl lg:text-3xl font-bold text-gray-900">
-                        {activeTab === 'all' ? 'Rent Companies' : 'Results'}
-                      </h2>
-                      <p className="text-gray-600 flex items-center space-x-2">
-                        <span>{rentCompanies.length} compan{rentCompanies.length !== 1 ? 'ies' : 'y'} found</span>
-                        <span className="text-gray-400">•</span>
-                        <span className="text-sm text-gray-500">Sorted by {getSortLabel().toLowerCase()}</span>
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-2 text-sm text-gray-500">
-                    <Award className="w-4 h-4" />
-                    <span>Top Rated</span>
-                  </div>
-                </div>
-                <div className={`${viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6' : 'space-y-4'}`}>
-                  {rentCompanies.map((company) => (
-                    <Link key={company.id} href={`/rent-company/${company.id}`}>
-                      <div className={`bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 border border-gray-200 hover:border-orange-200 ${
-                        viewMode === 'list' ? 'p-6 flex items-center space-x-6' : 'p-6'
-                      }`}>
-                        <div className={`${viewMode === 'list' ? 'flex-1' : 'flex items-start justify-between mb-4'}`}>
-                          <div className="flex-1">
-                            <h3 className="text-lg font-semibold text-gray-900 mb-1">{company.name}</h3>
-                            <p className="text-sm text-gray-500 flex items-center">
-                              <MapPin className="w-4 h-4 mr-1" />
-                              {company.city}, {company.province}
-                            </p>
-                            {company.description && (
-                              <p className="text-sm text-gray-600 line-clamp-2 mt-2">{company.description}</p>
-                            )}
-                          </div>
-                          <div className={`text-right ${viewMode === 'list' ? 'ml-4' : ''}`}>
-                            <div className="text-2xl font-bold text-gray-900">{(company.overall_rating || 0).toFixed(1)}</div>
-                            <div className="flex items-center">
-                              {[1, 2, 3, 4, 5].map((star) => (
-                                <Star
-                                  key={star}
-                                  className={`w-4 h-4 ${
-                                    star <= (company.overall_rating || 0) ? 'text-yellow-400 fill-current' : 'text-gray-300'
-                                  }`}
-                                />
-                              ))}
-                            </div>
-                            <div className="text-xs text-gray-500 mt-1">
-                              {company.total_reviews || 0} review{(company.total_reviews || 0) !== 1 ? 's' : ''}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {/* Modern Empty States */}
-            {activeTab === 'neighborhoods' && neighborhoods.length === 0 && !loading && (
-              <div className="bg-gradient-to-br from-blue-50 to-white rounded-3xl p-12 lg:p-16 text-center shadow-2xl border border-blue-100">
-                <div className="relative mb-8">
-                  <div className="w-24 h-24 bg-gradient-to-br from-blue-500 to-blue-600 rounded-3xl flex items-center justify-center mx-auto shadow-lg">
-                    <MapPin className="w-12 h-12 text-white" />
-                  </div>
-                  <div className="absolute -top-2 -right-2 w-8 h-8 bg-yellow-400 rounded-full flex items-center justify-center">
-                    <Sparkles className="w-4 h-4 text-white" />
-                  </div>
-                </div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-4">No neighborhoods found</h3>
-                <p className="text-gray-600 mb-8 max-w-lg mx-auto text-lg">
-                  {searchQuery ? `No neighborhoods match "${searchQuery}". Try a different search term.` : 'No neighborhoods have been added yet. Be the first to discover and rate one!'}
-                </p>
-                <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                  {searchQuery ? (
-                    <button
-                      onClick={() => setSearchQuery('')}
-                      className="px-8 py-4 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-2xl hover:from-blue-600 hover:to-blue-700 transition-all font-bold shadow-lg transform hover:scale-105"
-                    >
-                      Clear Search
-                    </button>
-                  ) : (
-                <Link
-                      href="/rate/neighborhood"
-                      className="px-8 py-4 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-2xl hover:from-blue-600 hover:to-blue-700 transition-all font-bold shadow-lg transform hover:scale-105"
-                >
-                      Add First Neighborhood
-                </Link>
-                  )}
-                </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {paginatedResults.map((property) => (
+                  <PropertyCard
+                    key={`${property.type}-${property.id}`}
+                    property={property}
+                    type={property.type}
+                  />
+                ))}
               </div>
-            )}
 
-            {activeTab === 'buildings' && buildings.length === 0 && !loading && (
-              <div className="bg-gradient-to-br from-green-50 to-white rounded-3xl p-12 lg:p-16 text-center shadow-2xl border border-green-100">
-                <div className="relative mb-8">
-                  <div className="w-24 h-24 bg-gradient-to-br from-green-500 to-green-600 rounded-3xl flex items-center justify-center mx-auto shadow-lg">
-                    <Building2 className="w-12 h-12 text-white" />
-                  </div>
-                  <div className="absolute -top-2 -right-2 w-8 h-8 bg-yellow-400 rounded-full flex items-center justify-center">
-                    <Sparkles className="w-4 h-4 text-white" />
-                  </div>
+            {/* Improved Pagination */}
+            {totalPages > 1 && (
+              <div className="mt-12 flex flex-col sm:flex-row items-center justify-between gap-4">
+                {/* Page Info */}
+                <div className="text-sm text-gray-600">
+                  Showing {startIndex + 1} to {Math.min(endIndex, results.length)} of {results.length.toLocaleString()} results
                 </div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-4">No buildings found</h3>
-                <p className="text-gray-600 mb-8 max-w-lg mx-auto text-lg">
-                  {searchQuery ? `No buildings match "${searchQuery}". Try a different search term.` : 'No buildings have been added yet. Be the first to discover and rate one!'}
-                </p>
-                <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                  {searchQuery ? (
-                    <button
-                      onClick={() => setSearchQuery('')}
-                      className="px-8 py-4 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-2xl hover:from-green-600 hover:to-green-700 transition-all font-bold shadow-lg transform hover:scale-105"
-                    >
-                      Clear Search
-                    </button>
-                  ) : (
-                    <Link
-                      href="/rate/building"
-                      className="px-8 py-4 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-2xl hover:from-green-600 hover:to-green-700 transition-all font-bold shadow-lg transform hover:scale-105"
-                    >
-                      Add First Building
-                    </Link>
-                  )}
-                </div>
-              </div>
-            )}
 
-            {activeTab === 'landlords' && landlords.length === 0 && !loading && (
-              <div className="bg-gradient-to-br from-purple-50 to-white rounded-3xl p-12 lg:p-16 text-center shadow-2xl border border-purple-100">
-                <div className="relative mb-8">
-                  <div className="w-24 h-24 bg-gradient-to-br from-purple-500 to-purple-600 rounded-3xl flex items-center justify-center mx-auto shadow-lg">
-                    <UserCheck className="w-12 h-12 text-white" />
-                  </div>
-                  <div className="absolute -top-2 -right-2 w-8 h-8 bg-yellow-400 rounded-full flex items-center justify-center">
-                    <Sparkles className="w-4 h-4 text-white" />
-                  </div>
-                </div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-4">No landlords found</h3>
-                <p className="text-gray-600 mb-8 max-w-lg mx-auto text-lg">
-                  {searchQuery ? `No landlords match "${searchQuery}". Try a different search term.` : 'No landlords have been added yet. Be the first to discover and rate one!'}
-                </p>
-                <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                  {searchQuery ? (
-                    <button
-                      onClick={() => setSearchQuery('')}
-                      className="px-8 py-4 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-2xl hover:from-purple-600 hover:to-purple-700 transition-all font-bold shadow-lg transform hover:scale-105"
-                    >
-                      Clear Search
-                    </button>
-                  ) : (
-                    <Link
-                      href="/rate/landlord"
-                      className="px-8 py-4 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-2xl hover:from-purple-600 hover:to-purple-700 transition-all font-bold shadow-lg transform hover:scale-105"
-                    >
-                      Add First Landlord
-                    </Link>
-                  )}
-                </div>
-              </div>
-            )}
+                {/* Pagination Controls */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                    className="px-4 py-2 bg-white border border-gray-300 rounded-xl font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:border-primary-500 hover:text-primary-600 transition-all flex items-center gap-1"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                    Previous
+                  </button>
 
-            {activeTab === 'rent-companies' && rentCompanies.length === 0 && !loading && (
-              <div className="bg-gradient-to-br from-orange-50 to-white rounded-3xl p-12 lg:p-16 text-center shadow-2xl border border-orange-100">
-                <div className="relative mb-8">
-                  <div className="w-24 h-24 bg-gradient-to-br from-orange-500 to-orange-600 rounded-3xl flex items-center justify-center mx-auto shadow-lg">
-                    <Building className="w-12 h-12 text-white" />
+                  <div className="flex items-center gap-1">
+                    {getPageNumbers().map((page, idx) => (
+                      page === '...' ? (
+                        <span key={`ellipsis-${idx}`} className="px-2 text-gray-400">...</span>
+                      ) : (
+                        <button
+                          key={page}
+                          onClick={() => setCurrentPage(page as number)}
+                          className={`w-10 h-10 rounded-xl font-bold text-sm transition-all ${
+                            currentPage === page
+                              ? 'bg-gradient-to-r from-primary-600 to-orange-600 text-white shadow-lg scale-110'
+                              : 'bg-white border border-gray-300 text-gray-700 hover:border-primary-500 hover:text-primary-600'
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      )
+                    ))}
                   </div>
-                  <div className="absolute -top-2 -right-2 w-8 h-8 bg-yellow-400 rounded-full flex items-center justify-center">
-                    <Sparkles className="w-4 h-4 text-white" />
-                  </div>
-                </div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-4">No rent companies found</h3>
-                <p className="text-gray-600 mb-8 max-w-lg mx-auto text-lg">
-                  {searchQuery ? `No rent companies match "${searchQuery}". Try a different search term.` : 'No rent companies have been added yet. Be the first to discover and rate one!'}
-                </p>
-                <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                  {searchQuery ? (
-                    <button
-                      onClick={() => setSearchQuery('')}
-                      className="px-8 py-4 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-2xl hover:from-orange-600 hover:to-orange-700 transition-all font-bold shadow-lg transform hover:scale-105"
-                    >
-                      Clear Search
-                    </button>
-                  ) : (
-                <Link
-                      href="/rate/rent-company"
-                      className="px-8 py-4 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-2xl hover:from-orange-600 hover:to-orange-700 transition-all font-bold shadow-lg transform hover:scale-105"
-                >
-                      Add First Rent Company
-                </Link>
-                  )}
+
+                  <button
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    disabled={currentPage === totalPages}
+                    className="px-4 py-2 bg-white border border-gray-300 rounded-xl font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:border-primary-500 hover:text-primary-600 transition-all flex items-center gap-1"
+                  >
+                    Next
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
             )}
           </>
-        )}
+        ) : (
+          <div className="bg-white rounded-2xl border border-gray-200 p-16 text-center">
+            <div className="w-24 h-24 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mx-auto mb-6">
+              <MapPin className="w-12 h-12 text-gray-400" />
+            </div>
+            <h3 className="text-2xl font-bold text-gray-900 mb-3">No results found</h3>
+            <p className="text-gray-600 mb-6 max-w-md mx-auto">
+                  {searchQuery 
+                ? `We couldn't find anything matching "${searchQuery}". Try adjusting your search or filters.`
+                : 'No properties match your current filters. Try adjusting your search criteria.'
+              }
+                </p>
+                <button
+                  onClick={() => {
+                    setSearchQuery('')
+                    setFilters({
+                      category: 'all',
+                  sortBy: 'rating',
+                  ratingMin: 0,
+                      hasReviews: false,
+                      multipleReviews: false,
+                  location: '',
+                    })
+                setCurrentPage(1)
+                  }}
+              className="px-6 py-3 bg-gradient-to-r from-primary-600 to-orange-600 text-white rounded-xl font-bold hover:from-primary-700 hover:to-orange-700 transition-all shadow-lg"
+                >
+              Clear All Filters
+                </button>
+              </div>
+            )}
       </div>
     </main>
   )
@@ -864,10 +546,12 @@ function ExploreContent() {
 
 export default function Explore() {
   return (
-    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-primary-500"></div></div>}>
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white flex items-center justify-center">
+        <div className="w-16 h-16 border-4 border-primary-200 rounded-full animate-spin border-t-primary-600"></div>
+      </div>
+    }>
       <ExploreContent />
     </Suspense>
   )
 }
-
-

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Star, Upload, X, Building2, Users, Sparkles, Wrench, DollarSign, Volume2, Package } from 'lucide-react'
+import { Star, Upload, X, Building2, Users, Sparkles, Wrench, DollarSign, Volume2, Package, ChevronRight, ArrowRight } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import PhotonAutocomplete from '@/components/PhotonAutocomplete'
 
@@ -18,62 +18,85 @@ export default function RateBuilding() {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const [userLoading, setUserLoading] = useState(true)
+  const [currentStep, setCurrentStep] = useState(1)
+  
+  // Location info
   const [name, setName] = useState('')
   const [address, setAddress] = useState('')
   const [city, setCity] = useState('')
   const [province, setProvince] = useState('')
   const [latitude, setLatitude] = useState<number>(0)
   const [longitude, setLongitude] = useState<number>(0)
+  
+  // Ratings
+  const [ratings, setRatings] = useState<RatingCategory[]>([
+    { id: 'management', label: 'Management', icon: <Users className="w-8 h-8" />, value: 0 },
+    { id: 'cleanliness', label: 'Cleanliness', icon: <Sparkles className="w-8 h-8" />, value: 0 },
+    { id: 'maintenance', label: 'Maintenance', icon: <Wrench className="w-8 h-8" />, value: 0 },
+    { id: 'rent_value', label: 'Rent Value', icon: <DollarSign className="w-8 h-8" />, value: 0 },
+    { id: 'noise', label: 'Noise Level', icon: <Volume2 className="w-8 h-8" />, value: 0 },
+    { id: 'amenities', label: 'Amenities', icon: <Package className="w-8 h-8" />, value: 0 },
+  ])
+  
+  // Additional info
   const [comment, setComment] = useState('')
   const [images, setImages] = useState<File[]>([])
   const [imagePreviews, setImagePreviews] = useState<string[]>([])
   const [isAnonymous, setIsAnonymous] = useState(true)
   const [displayName, setDisplayName] = useState('')
 
-  const [ratings, setRatings] = useState<RatingCategory[]>([
-    { id: 'management', label: 'Management', icon: <Users className="w-5 h-5" />, value: 0 },
-    { id: 'cleanliness', label: 'Cleanliness', icon: <Sparkles className="w-5 h-5" />, value: 0 },
-    { id: 'maintenance', label: 'Maintenance', icon: <Wrench className="w-5 h-5" />, value: 0 },
-    { id: 'rent_value', label: 'Rent Value', icon: <DollarSign className="w-5 h-5" />, value: 0 },
-    { id: 'noise', label: 'Noise Level', icon: <Volume2 className="w-5 h-5" />, value: 0 },
-    { id: 'amenities', label: 'Amenities', icon: <Package className="w-5 h-5" />, value: 0 },
-  ])
+  const steps = [
+    { number: 1, title: 'Building Details' },
+    { number: 2, title: 'Rate Categories' },
+    { number: 3, title: 'Review Details' },
+    { number: 4, title: 'Submit Review' },
+  ]
 
   useEffect(() => {
     const checkAuth = async () => {
       try {
         const { data: { session }, error } = await supabase.auth.getSession()
         
-        if (error) {
-          console.error('Auth error:', error)
-          setUserLoading(false)
+        if (error || !session) {
           router.push('/login?redirect=/rate/building')
           return
         }
         
-        if (!session) {
-          console.log('No session found, redirecting to login')
-          setUserLoading(false)
-          router.push('/login?redirect=/rate/building')
-          return
-        }
-        
-        console.log('User authenticated:', session.user.email)
         setUser(session.user)
+        
+        // Check user status
+        const { data: profile } = await supabase
+          .from('user_profiles')
+          .select('status, banned_until, cooled_until, moderation_reason')
+          .eq('id', session.user.id)
+          .single()
+
+        if (profile?.status === 'banned') {
+          const isStillBanned = !profile.banned_until || new Date(profile.banned_until) > new Date()
+          if (isStillBanned) {
+            alert(`🚫 Account Banned\n\nReason: ${profile.moderation_reason || 'No reason provided'}\n\nYou cannot submit reviews while banned.`)
+            router.push('/profile')
+            return
+          }
+        }
+
+        if (profile?.status === 'cooled') {
+          const isStillCooled = !profile.cooled_until || new Date(profile.cooled_until) > new Date()
+          if (isStillCooled) {
+            alert(`❄️ Cooling Off Period\n\nReason: ${profile.moderation_reason || 'No reason provided'}\n\nYou cannot submit reviews during your cooling off period.`)
+            router.push('/profile')
+          return
+          }
+        }
+        
         setUserLoading(false)
       } catch (error) {
-        console.error('Auth check failed:', error)
-        setUserLoading(false)
         router.push('/login?redirect=/rate/building')
       }
     }
     
     checkAuth()
   }, [router])
-
-  const handleRatingChange = (categoryId: string, value: number) => {
-    setRatings(ratings.map(r => r.id === categoryId ? { ...r, value } : r))
-  }
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || [])
@@ -84,11 +107,10 @@ export default function RateBuilding() {
 
     setImages([...images, ...files])
     
-    // Create previews
     files.forEach(file => {
       const reader = new FileReader()
-      reader.onloadend = () => {
-        setImagePreviews(prev => [...prev, reader.result as string])
+      reader.onload = (e) => {
+        setImagePreviews(prev => [...prev, e.target?.result as string])
       }
       reader.readAsDataURL(file)
     })
@@ -99,324 +121,250 @@ export default function RateBuilding() {
     setImagePreviews(imagePreviews.filter((_, i) => i !== index))
   }
 
+  const generateSlug = (text: string) => {
+    return text
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '')
+  }
+
+  const updateRating = (id: string, value: number) => {
+    setRatings(ratings.map(r => r.id === id ? { ...r, value } : r))
+  }
+
+  // Helper function to add timeout to promises
+  const withTimeout = <T,>(promise: Promise<T>, timeoutMs: number = 30000): Promise<T> => {
+    return Promise.race([
+      promise,
+      new Promise<T>((_, reject) =>
+        setTimeout(() => reject(new Error('Operation timed out. Please try again.')), timeoutMs)
+      )
+    ])
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    // Prevent double submission
-    if (loading) {
-      console.log('Already submitting, please wait...')
-      return
-    }
-    
-    // Validate form
-    if (!name || !address || !city || !province) {
-      alert('❌ Please fill in all building details')
+    if (!user || !name || !address || !city || !province) {
+      alert('Please fill in the building details')
       return
     }
 
     if (ratings.some(r => r.value === 0)) {
-      alert('❌ Please rate all categories')
+      alert('Please rate all 6 categories')
       return
     }
-    
-    // Double-check user is logged in
-    console.log('Checking authentication before submit...')
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-    
-    if (sessionError) {
-      console.error('Session error:', sessionError)
-      alert('❌ Authentication error. Please try logging in again.')
-      router.push('/login?redirect=/rate/building')
-      return
-    }
-    
-    if (!session || !session.user) {
-      console.log('No session found')
-      alert('❌ You must be logged in to submit a rating. Redirecting to login...')
-      router.push('/login?redirect=/rate/building')
-      return
-    }
-    
-    console.log('✅ User authenticated:', session.user.email)
-    const currentUser = session.user
 
     setLoading(true)
 
     try {
-      // Upload images to Supabase Storage
+      // Upload images first with timeout
       const imageUrls: string[] = []
       for (const image of images) {
-        const fileName = `buildings/${currentUser.id}/${Date.now()}-${image.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`
-        
-        const { data, error } = await supabase.storage
-          .from('building-images')
-          .upload(fileName, image, {
-            cacheControl: '3600',
-            upsert: false
-          })
-
-        if (error) {
-          console.error('Error uploading image:', error)
-          continue // Skip this image and continue with others
-        }
-
-        if (data) {
-          // Get the public URL
-          const { data: urlData } = supabase.storage
-            .from('building-images')
-            .getPublicUrl(fileName)
+        try {
+          const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.jpg`
+          const uploadPromise = supabase.storage
+            .from('buildings')
+            .upload(fileName, image)
           
-          if (urlData?.publicUrl) {
-            imageUrls.push(urlData.publicUrl)
+          const { error: uploadError } = await withTimeout(uploadPromise, 20000) // 20s timeout per image
+          
+          if (!uploadError) {
+            const { data } = supabase.storage.from('buildings').getPublicUrl(fileName)
+            imageUrls.push(data.publicUrl)
+          } else {
+            console.warn('Image upload failed:', uploadError)
           }
+        } catch (uploadErr: any) {
+          console.warn('Image upload error:', uploadErr)
+          // Continue with other images even if one fails
         }
       }
-      
-      console.log('Uploaded image URLs:', imageUrls)
 
-      // STEP 1: Check if building location exists (by address AND city)
-      console.log('🔍 Checking if building exists:', address, city)
-      
-      // Try to find existing building by exact address match
-      const { data: existingBuildings, error: searchError } = await supabase
+      // Calculate overall rating
+      const avgRating = Math.round(ratings.reduce((sum, r) => sum + r.value, 0) / ratings.length)
+
+      // Check if building exists with timeout
+      const slug = generateSlug(`${name}-${city}`)
+      const checkPromise = Promise.resolve(supabase
         .from('buildings')
-        .select('id, name, address')
-        .ilike('address', address.trim())
-        .ilike('city', city.trim())
-        .limit(1)
-
-      if (searchError) {
-        console.error('❌ Search error:', searchError)
-        throw searchError
-      }
+        .select('id')
+        .eq('slug', slug)
+        .single())
+      
+      const checkResult = await withTimeout(checkPromise, 10000)
+      const { data: existingBuilding } = checkResult
 
       let buildingId: string
 
-      if (existingBuildings && existingBuildings.length > 0) {
-        // Building exists - UPDATE it and use existing ID
-        buildingId = existingBuildings[0].id
-        console.log('✅ Found existing building:', existingBuildings[0].name)
-        console.log('📝 Will add your review to this existing building')
-        
-        // Optionally update building info if new data is better
-        // (e.g., if old name was incomplete and new one is full address)
-        if (name && name.length > existingBuildings[0].name.length) {
-          console.log('📝 Updating building name with more complete info...')
-          await supabase
-            .from('buildings')
-            .update({ 
-              name: name,
-              latitude: latitude || existingBuildings[0].latitude,
-              longitude: longitude || existingBuildings[0].longitude,
-            })
-            .eq('id', buildingId)
-        }
+      if (existingBuilding) {
+        buildingId = existingBuilding.id
       } else {
-        // Building doesn't exist - CREATE new building
-        console.log('✅ Creating new building location...')
-        
-        // Generate SEO-friendly slug from address
-        const slug = `${address}-${city}`
-          .toLowerCase()
-          .replace(/[^a-z0-9\s-]/g, '')
-          .replace(/\s+/g, '-')
-          .replace(/-+/g, '-')
-          .replace(/^-+|-+$/g, '')
-        
-        const { data: newBuilding, error: createError } = await supabase
+        const insertPromise = Promise.resolve(supabase
           .from('buildings')
           .insert({
-            name: name || address, // Use full address as name if no name provided
+            name,
             address,
             city,
             province,
-            latitude,
-            longitude,
             slug,
           })
           .select('id')
-          .single()
+          .single())
 
-        if (createError) {
-          console.error('❌ Create error:', createError)
-          alert('Error creating building: ' + createError.message + '\n\nPlease make sure the database is set up correctly.')
-          throw createError
-        }
-        
+        const insertResult = await withTimeout(insertPromise, 10000)
+        const { data: newBuilding, error: buildingError } = insertResult
+
+        if (buildingError) throw buildingError
+        if (!newBuilding) throw new Error('Failed to create building')
         buildingId = newBuilding.id
-        console.log('✅ Created new building with ID:', buildingId)
       }
 
-      // STEP 2: Check if THIS USER already reviewed this building
-      const { data: existingReview, error: reviewSearchError } = await supabase
+      // Check if user already reviewed this building with timeout
+      const reviewCheckPromise = Promise.resolve(supabase
         .from('building_reviews')
         .select('id')
         .eq('building_id', buildingId)
-        .eq('user_id', currentUser.id)
-        .maybeSingle()
+        .eq('user_id', user.id)
+        .single())
+      
+      const reviewCheckResult = await withTimeout(reviewCheckPromise, 10000)
+      const { data: existingReview } = reviewCheckResult
 
-      if (reviewSearchError && reviewSearchError.code !== 'PGRST116') {
-        console.error('Review search error:', reviewSearchError)
-        throw reviewSearchError
+      const reviewData = {
+        ...Object.fromEntries(ratings.map(r => [r.id, r.value])),
+        overall_rating: avgRating,
+        review: comment || null,
+        images: imageUrls.length > 0 ? imageUrls : null,
+        is_anonymous: isAnonymous,
+        display_name: !isAnonymous ? displayName : null,
       }
 
       if (existingReview) {
-        // User already reviewed - UPDATE their review
-        console.log('✅ Updating your existing review...')
-        
-        // Recalculate average for update
-        const updateAvgRating = (
-          (ratings.find(r => r.id === 'management')?.value || 0) +
-          (ratings.find(r => r.id === 'cleanliness')?.value || 0) +
-          (ratings.find(r => r.id === 'maintenance')?.value || 0) +
-          (ratings.find(r => r.id === 'rent_value')?.value || 0) +
-          (ratings.find(r => r.id === 'noise')?.value || 0) +
-          (ratings.find(r => r.id === 'amenities')?.value || 0)
-        ) / 6
-
-        const { error: updateError } = await supabase
+        const updatePromise = Promise.resolve(supabase
           .from('building_reviews')
-          .update({
-            review: comment || 'No review text provided', // Required field
-            overall_rating: Math.round(updateAvgRating), // Required field - round to integer
-            management: ratings.find(r => r.id === 'management')?.value,
-            cleanliness: ratings.find(r => r.id === 'cleanliness')?.value,
-            maintenance: ratings.find(r => r.id === 'maintenance')?.value,
-            rent_value: ratings.find(r => r.id === 'rent_value')?.value,
-            noise: ratings.find(r => r.id === 'noise')?.value,
-            amenities: ratings.find(r => r.id === 'amenities')?.value,
-            comment: comment || null, // Keep for backwards compatibility
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', existingReview.id)
-
-        if (updateError) {
-          console.error('Update error:', updateError)
-          alert('Error updating review: ' + updateError.message)
-          throw updateError
-        }
+          .update({ ...reviewData, updated_at: new Date().toISOString() })
+          .eq('id', existingReview.id))
         
-        console.log('✅ Your review updated! (Trigger will recalculate average)')
+        const updateResult = await withTimeout(updatePromise, 10000)
+        const { error: updateError } = updateResult
+        if (updateError) throw updateError
+        
+        alert('✅ Your review has been updated!')
       } else {
-        // User hasn't reviewed yet - CREATE new review
-        console.log('✅ Creating your new review...')
-        
-        // Calculate average rating
-        const managementVal = ratings.find(r => r.id === 'management')?.value || 0
-        const cleanlinessVal = ratings.find(r => r.id === 'cleanliness')?.value || 0
-        const maintenanceVal = ratings.find(r => r.id === 'maintenance')?.value || 0
-        const rentValueVal = ratings.find(r => r.id === 'rent_value')?.value || 0
-        const noiseVal = ratings.find(r => r.id === 'noise')?.value || 0
-        const amenitiesVal = ratings.find(r => r.id === 'amenities')?.value || 0
-        const avgRating = (managementVal + cleanlinessVal + maintenanceVal + rentValueVal + noiseVal + amenitiesVal) / 6
-        
-        // Auto-approve if rating is 2 stars or higher, otherwise pending
-        const reviewStatus = avgRating >= 2 ? 'approved' : 'pending'
-        
-        const { error: insertError} = await supabase
+        const insertPromise = Promise.resolve(supabase
           .from('building_reviews')
           .insert({
             building_id: buildingId,
-            user_id: currentUser.id,
-            review: comment || 'No review text provided', // Required field
-            overall_rating: Math.round(avgRating), // Required field - round to integer
-            management: managementVal,
-            cleanliness: cleanlinessVal,
-            maintenance: maintenanceVal,
-            rent_value: rentValueVal,
-            noise: noiseVal,
-            amenities: amenitiesVal,
-            comment: comment || null, // Keep for backwards compatibility
-            images: imageUrls,
-            is_anonymous: isAnonymous,
-            display_name: !isAnonymous ? displayName : null,
-            status: reviewStatus,
-          })
-
-        if (insertError) {
-          console.error('Insert error:', insertError)
-          alert('Error: ' + insertError.message + '\n\nMake sure you ran FINAL_MULTI_USER_SQL.sql!')
-          throw insertError
-        }
+            user_id: user.id,
+            ...reviewData,
+          }))
         
-        console.log('✅ Your review created! (Trigger will calculate average)')
+        const insertResult = await withTimeout(insertPromise, 10000)
+        const { error: insertError } = insertResult
+        if (insertError) throw insertError
+        
+        alert('✅ Rating submitted successfully!')
       }
 
-      // Calculate average rating to determine if it needs approval
-      const avgRating = (
-        (ratings.find(r => r.id === 'management')?.value || 0) +
-        (ratings.find(r => r.id === 'cleanliness')?.value || 0) +
-        (ratings.find(r => r.id === 'maintenance')?.value || 0) +
-        (ratings.find(r => r.id === 'rent_value')?.value || 0) +
-        (ratings.find(r => r.id === 'noise')?.value || 0) +
-        (ratings.find(r => r.id === 'amenities')?.value || 0)
-      ) / 6
-
-      // Show appropriate success message
-      if (avgRating >= 3) {
-        alert('✅ Rating Submitted Successfully!\n\n🎉 Your review has been APPROVED and is now LIVE!\n\nOther users can now see your review.\n\nThank you for contributing!')
-      } else {
-        alert('✅ Rating Submitted Successfully!\n\n⏳ Your review is under admin review.\n\nWhy? Reviews with 2 stars or less need admin approval to prevent abuse.\n\nYou will be notified once approved.\n\nThank you for your honest feedback!')
-      }
-      
-      router.push('/explore?success=true')
-    } catch (error: any) {
-      console.error('❌ Error submitting rating:', error)
-      alert('Error submitting rating:\n\n' + (error.message || error.toString() || 'Unknown error') + '\n\nCheck browser console for details.')
+      // Use window.location for more reliable redirect
       setLoading(false)
+      window.location.href = '/explore'
+    } catch (error: any) {
+      console.error('Error submitting rating:', error)
+      setLoading(false)
+      const errorMessage = error.message || 'Unknown error occurred'
+      alert(`Error submitting rating: ${errorMessage}\n\nPlease try again or contact support if the issue persists.`)
     }
   }
 
-  // Show loading state while checking auth
+  const getCompletedSteps = () => {
+    let count = 0
+    if (name && address && city && province) count++
+    if (ratings.every(r => r.value > 0)) count++
+    if (comment || imagePreviews.length > 0) count++
+    return count
+  }
+
+  const canProceedToNextStep = () => {
+    switch (currentStep) {
+      case 1:
+        return name && address && city && province
+      case 2:
+        return ratings.every(r => r.value > 0)
+      case 3:
+        return true
+      default:
+        return false
+    }
+  }
+
   if (userLoading) {
     return (
-      <main className="min-h-screen bg-gray-50 py-12 px-4">
-        <div className="max-w-4xl mx-auto">
-          <div className="bg-white rounded-3xl shadow-lg p-8 md:p-12">
-            <div className="flex flex-col items-center justify-center py-20">
-              <div className="animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-primary-500 mb-4"></div>
-              <p className="text-gray-600">Loading form...</p>
-            </div>
-          </div>
+      <div className="min-h-screen bg-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
         </div>
-      </main>
+      </div>
     )
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 py-12 px-4">
-      <div className="max-w-4xl mx-auto">
-        <div className="bg-white rounded-3xl shadow-lg p-8 md:p-12">
-          <div className="flex items-center space-x-3 mb-8">
-            <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center">
-              <Building2 className="w-6 h-6 text-gray-600" />
+    <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-primary-50/30 py-8 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-6xl mx-auto">
+        
+        {/* Progress Steps */}
+        <div className="mb-8 lg:mb-16">
+          <div className="flex items-center justify-center space-x-4 lg:space-x-8">
+            {steps.map((step, index) => (
+              <div key={step.number} className="flex items-center">
+                <div className="flex items-center">
+                  <div className={`w-10 h-10 lg:w-12 lg:h-12 rounded-full flex items-center justify-center font-bold text-sm lg:text-base transition-all ${
+                    currentStep === step.number
+                      ? 'bg-primary-600 text-white shadow-lg scale-110'
+                      : currentStep > step.number
+                      ? 'bg-primary-600 text-white shadow-md'
+                      : 'bg-gray-200 text-gray-500'
+                  }`}>
+                    {currentStep > step.number ? '✓' : step.number}
+                  </div>
+                  {index < steps.length - 1 && (
+                    <div className={`w-8 lg:w-16 h-0.5 transition-all ${
+                      currentStep > step.number ? 'bg-primary-600' : 'bg-gray-200'
+                    }`} />
+                  )}
             </div>
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Rate an Apartment/Building</h1>
-              <p className="text-gray-600">Share your experience with the community</p>
             </div>
+            ))}
           </div>
+        </div>
 
-          <form onSubmit={handleSubmit} className="space-y-8">
-            {/* Basic Information */}
-            <div className="space-y-6">
-              <h2 className="text-xl font-bold text-gray-900">Building Details</h2>
+        {/* Main Content */}
+        <div className="grid lg:grid-cols-3 gap-8 lg:gap-12">
+          
+          {/* Left Panel - Form */}
+          <div className="lg:col-span-2">
+            <form onSubmit={handleSubmit} className="space-y-6">
               
-              <p className="text-gray-600 bg-primary-50 p-4 rounded-xl border border-primary-200">
-                <strong>💡 Tip:</strong> Use the search below to find your building address. It will auto-fill all the fields!
-              </p>
-
+              {/* Step 1: Building Details */}
+              {currentStep === 1 && (
+                <div className="bg-white rounded-3xl shadow-xl p-8 border border-gray-100 animate-fade-in">
+                  <h2 className="text-3xl font-bold text-gray-900 mb-2">Building Information</h2>
+                  <p className="text-gray-600 mb-8">Where is this building located?</p>
+                  
+                  <div className="space-y-6">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-3">
+                        Search for your building
+                      </label>
               <PhotonAutocomplete
                 placeholder="Search for a building address in Canada..."
                 onLocationSelect={(query, data) => {
                   if (data) {
                     const fullAddress = data.address || query
                     setAddress(fullAddress)
-                    
-                    // Use full address as name if no specific building name
-                    // This makes it easier to search later
-                    const buildingName = data.name || fullAddress
-                    setName(buildingName)
+                            setName(data.name || fullAddress)
                     setCity(data.city || '')
                     setProvince(data.province || '')
                     setLatitude(data.latitude || 0)
@@ -424,6 +372,7 @@ export default function RateBuilding() {
                   }
                 }}
               />
+                    </div>
 
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -434,26 +383,26 @@ export default function RateBuilding() {
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all"
-                  placeholder="Auto-filled from search (editable)"
+                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+                        placeholder="Auto-filled from search"
                 />
               </div>
 
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Address *
+                        Full Address *
                 </label>
                 <input
                   type="text"
                   required
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all"
-                  placeholder="Auto-filled from search (editable)"
+                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
+                        placeholder="Auto-filled from search"
                 />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
                     City *
@@ -463,11 +412,9 @@ export default function RateBuilding() {
                     required
                     value={city}
                     onChange={(e) => setCity(e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all"
-                    placeholder="Auto-filled from search"
+                          className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
                   />
                 </div>
-
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
                     Province *
@@ -477,171 +424,100 @@ export default function RateBuilding() {
                     required
                     value={province}
                     onChange={(e) => setProvince(e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all"
-                    placeholder="Auto-filled from search"
+                          className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all"
                   />
                 </div>
               </div>
             </div>
 
-            {/* Comment (Optional) */}
-            <div className="space-y-3">
-              <h2 className="text-xl font-bold text-gray-900">Your Review (Optional)</h2>
-              <textarea
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-                rows={4}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all resize-none"
-                placeholder="Share your experience... How is the management? Building quality? Value for rent? (Optional)"
-              />
-              <p className="text-xs text-gray-500">Help others by explaining your ratings</p>
-            </div>
-
-            {/* Privacy Options */}
-            <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
-              <h3 className="font-bold text-gray-900 mb-4">Privacy Options</h3>
-              
-              <div className="space-y-3">
-                <label className="flex items-center space-x-3 cursor-pointer">
-                  <input
-                    type="radio"
-                    checked={isAnonymous}
-                    onChange={() => setIsAnonymous(true)}
-                    className="w-4 h-4 text-primary-500 focus:ring-primary-500"
-                  />
-                  <div>
-                    <div className="font-semibold text-gray-900">Post Anonymously</div>
-                    <div className="text-sm text-gray-600">Your name won't be shown</div>
-                  </div>
-                </label>
-                
-                <label className="flex items-center space-x-3 cursor-pointer">
-                  <input
-                    type="radio"
-                    checked={!isAnonymous}
-                    onChange={() => setIsAnonymous(false)}
-                    className="w-4 h-4 text-primary-500 focus:ring-primary-500"
-                  />
-                  <div>
-                    <div className="font-semibold text-gray-900">Show My Name</div>
-                    <div className="text-sm text-gray-600">Display your identity</div>
-                  </div>
-                </label>
-                
-                {!isAnonymous && (
-                  <input
-                    type="text"
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                    placeholder="Enter display name (optional)"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none text-sm"
-                  />
-                )}
-              </div>
-            </div>
-
-            {/* Ratings */}
-            <div className="space-y-6">
-              <div>
-                <h2 className="text-xl font-bold text-gray-900 mb-2">Rate Your Building Experience</h2>
-                <div className="bg-gradient-to-r from-blue-50 to-primary-50 rounded-xl p-5 border border-blue-200">
-                  <div className="flex items-start space-x-3">
-                    <div className="text-blue-600 mt-1">
-                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="font-bold text-gray-900 mb-2">How to Rate:</h3>
-                      <ul className="text-sm text-gray-700 space-y-1">
-                        <li><strong>⭐ 1 Star:</strong> Very Poor - Major problems, not recommended</li>
-                        <li><strong>⭐⭐ 2 Stars:</strong> Poor - Significant issues</li>
-                        <li><strong>⭐⭐⭐ 3 Stars:</strong> Average - Acceptable with some concerns</li>
-                        <li><strong>⭐⭐⭐⭐ 4 Stars:</strong> Good - Minor issues, generally satisfied</li>
-                        <li><strong>⭐⭐⭐⭐⭐ 5 Stars:</strong> Excellent - Highly recommended!</li>
-                      </ul>
-                      <p className="text-xs text-gray-600 mt-3 bg-white/50 p-2 rounded">
-                        💡 <strong>Tip:</strong> If a building already exists in our database, your rating will be added to it automatically - no duplicates!
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {ratings.map((category) => {
-                  const descriptions: Record<string, string> = {
-                    management: 'How responsive and helpful is the property management?',
-                    cleanliness: 'How clean are common areas, hallways, and building exterior?',
-                    maintenance: 'How quickly are repairs handled? Building condition?',
-                    rent_value: 'Is the rent fair for what you get?',
-                    noise: 'How quiet is it? Any disturbances from neighbors or street?',
-                    amenities: 'Quality of facilities: gym, parking, laundry, etc.'
-                  }
-                  
-                  return (
-                    <div key={category.id} className="bg-white border-2 border-gray-200 rounded-xl p-6 hover:border-primary-300 transition-colors">
-                      <div className="flex items-center space-x-2 mb-2">
-                        <div className="text-primary-600">{category.icon}</div>
-                        <span className="font-bold text-gray-900">{category.label}</span>
-                      </div>
-                      <p className="text-xs text-gray-600 mb-4">{descriptions[category.id]}</p>
-                      <div className="flex space-x-2">
-                        {[1, 2, 3, 4, 5].map((star) => (
-                          <button
-                            key={star}
-                            type="button"
-                            onClick={() => handleRatingChange(category.id, star)}
-                            className="transition-all duration-200 hover:scale-125 focus:outline-none focus:ring-2 focus:ring-primary-300 rounded"
-                          >
-                            <Star
-                              className={`w-8 h-8 ${
-                                star <= category.value
-                                  ? 'text-primary-500 fill-primary-500 drop-shadow'
-                                  : 'text-gray-300 hover:text-gray-400'
-                              }`}
-                            />
-                          </button>
-                        ))}
-                      </div>
-                      {category.value > 0 && (
-                        <p className="text-sm font-semibold text-primary-600 mt-2">
-                          {category.value === 5 ? '🎉 Excellent!' : 
-                           category.value === 4 ? '👍 Good' : 
-                           category.value === 3 ? '👌 Average' : 
-                           category.value === 2 ? '⚠️ Poor' : 
-                           '❌ Very Poor'}
-                        </p>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-
-            {/* Image Upload */}
-            <div className="space-y-4">
-              <h2 className="text-xl font-bold text-gray-900">Photos (Optional)</h2>
-              <p className="text-gray-600">Upload up to 5 photos of the building</p>
-
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                {imagePreviews.map((preview, index) => (
-                  <div key={index} className="relative aspect-square rounded-xl overflow-hidden bg-gray-100">
-                    <img src={preview} alt={`Preview ${index + 1}`} className="w-full h-full object-cover" />
+                  <div className="mt-8 flex justify-end">
                     <button
                       type="button"
-                      onClick={() => removeImage(index)}
-                      className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full hover:bg-red-600 transition-colors"
+                      onClick={() => canProceedToNextStep() && setCurrentStep(2)}
+                      disabled={!canProceedToNextStep()}
+                      className="px-5 py-2.5 bg-gradient-to-r from-primary-600 to-primary-700 text-white rounded-lg font-semibold text-sm flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed hover:from-primary-700 hover:to-primary-800 transition-all shadow-md hover:shadow-lg transform hover:scale-[1.02] active:scale-[0.98]"
                     >
-                      <X className="w-4 h-4" />
+                      <span>Continue</span>
+                      <ChevronRight className="w-4 h-4" />
                     </button>
                   </div>
-                ))}
+                </div>
+              )}
 
-                {images.length < 5 && (
-                  <label className="aspect-square rounded-xl border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:border-primary-500 hover:bg-primary-50 transition-all">
-                    <Upload className="w-8 h-8 text-gray-400 mb-2" />
-                    <span className="text-sm text-gray-500">Upload</span>
+              {/* Step 2: Ratings */}
+              {currentStep === 2 && (
+                <div className="bg-white rounded-3xl shadow-xl p-8 border border-gray-100 animate-fade-in">
+                  <h2 className="text-3xl font-bold text-gray-900 mb-2">Rate This Building</h2>
+                  <p className="text-gray-600 mb-8">How would you rate each category?</p>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {ratings.map((category, idx) => {
+                      const colorMap = ['green', 'blue', 'orange', 'purple', 'pink', 'indigo']
+                  return (
+                        <RatingCard
+                          key={category.id}
+                          icon={category.icon}
+                          label={category.label}
+                          rating={category.value}
+                          setRating={(v: number) => updateRating(category.id, v)}
+                          color={colorMap[idx % colorMap.length]}
+                        />
+                      )
+                    })}
+            </div>
+
+                  <div className="mt-8 flex justify-between">
+                    <button
+                      type="button"
+                      onClick={() => setCurrentStep(1)}
+                      className="px-5 py-2.5 bg-gray-100 text-gray-700 rounded-lg font-semibold text-sm hover:bg-gray-200 transition-all"
+                    >
+                      Back
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => canProceedToNextStep() && setCurrentStep(3)}
+                      disabled={!canProceedToNextStep()}
+                      className="px-5 py-2.5 bg-gradient-to-r from-primary-600 to-primary-700 text-white rounded-lg font-semibold text-sm flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed hover:from-primary-700 hover:to-primary-800 transition-all shadow-md hover:shadow-lg transform hover:scale-[1.02] active:scale-[0.98]"
+                    >
+                      <span>Continue</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Step 3: Additional Details */}
+              {currentStep === 3 && (
+                <div className="bg-white rounded-3xl shadow-xl p-8 border border-gray-100 animate-fade-in">
+                  <h2 className="text-3xl font-bold text-gray-900 mb-2">Review Details</h2>
+                  <p className="text-gray-600 mb-8">Add any additional information (optional)</p>
+                  
+                  <div className="space-y-6">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-3">
+                        Share your experience
+                      </label>
+                      <textarea
+                        value={comment}
+                        onChange={(e) => setComment(e.target.value)}
+                        rows={5}
+                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-all resize-none"
+                        placeholder="Share your experience..."
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-3">
+                        Add Photos
+                      </label>
+                      <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 hover:border-primary-400 transition-colors cursor-pointer">
+                        <label className="flex flex-col items-center cursor-pointer">
+                          <Upload className="w-12 h-12 text-gray-400 mb-3" />
+                          <span className="text-gray-600 font-medium mb-1">
+                            Click to upload or drag and drop
+                          </span>
+                          <span className="text-sm text-gray-500">Maximum 5 images</span>
                     <input
                       type="file"
                       accept="image/*"
@@ -650,31 +526,207 @@ export default function RateBuilding() {
                       className="hidden"
                     />
                   </label>
+                      </div>
+                      
+                      {imagePreviews.length > 0 && (
+                        <div className="grid grid-cols-3 gap-4 mt-4">
+                          {imagePreviews.map((preview, index) => (
+                            <div key={index} className="relative group">
+                              <img
+                                src={preview}
+                                alt={`Preview ${index + 1}`}
+                                className="w-full h-32 object-cover rounded-xl border-2 border-gray-200"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => removeImage(index)}
+                                className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1.5 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
                 )}
               </div>
+
+                    <div className="bg-gray-50 rounded-xl p-6 border border-gray-200">
+                      <label className="flex items-start space-x-4 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={isAnonymous}
+                          onChange={(e) => setIsAnonymous(e.target.checked)}
+                          className="w-5 h-5 mt-0.5 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                        />
+                        <div>
+                          <span className="block font-semibold text-gray-900">Submit as anonymous</span>
+                          <span className="text-sm text-gray-600">Your name won&apos;t be shown with this review</span>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="mt-8 flex justify-between">
+                    <button
+                      type="button"
+                      onClick={() => setCurrentStep(2)}
+                      className="px-5 py-2.5 bg-gray-100 text-gray-700 rounded-lg font-semibold text-sm hover:bg-gray-200 transition-all"
+                    >
+                      Back
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCurrentStep(4)}
+                      className="px-5 py-2.5 bg-gradient-to-r from-primary-600 to-primary-700 text-white rounded-lg font-semibold text-sm flex items-center space-x-2 hover:from-primary-700 hover:to-primary-800 transition-all shadow-md hover:shadow-lg transform hover:scale-[1.02] active:scale-[0.98]"
+                    >
+                      <span>Continue</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Step 4: Review & Submit */}
+              {currentStep === 4 && (
+                <div className="bg-white rounded-3xl shadow-xl p-8 border border-gray-100 animate-fade-in">
+                  <h2 className="text-3xl font-bold text-gray-900 mb-2">Review & Submit</h2>
+                  <p className="text-gray-600 mb-8">Double-check your review before submitting</p>
+                  
+                  <div className="space-y-6">
+                    <div className="bg-gradient-to-br from-primary-50 to-primary-100 rounded-2xl p-6 border border-primary-200">
+                      <h3 className="font-bold text-lg text-gray-900 mb-4">{name}</h3>
+                      <div className="grid grid-cols-3 gap-4">
+                        {ratings.map((r) => (
+                          <div key={r.id} className="text-center">
+                            <div className="text-2xl font-black text-primary-600 mb-1">{r.value}</div>
+                            <div className="text-xs text-gray-600">{r.label}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {comment && (
+                      <div className="p-4 bg-gray-50 rounded-xl">
+                        <p className="text-gray-700 whitespace-pre-wrap">{comment}</p>
+                      </div>
+                    )}
+
+                    {imagePreviews.length > 0 && (
+                      <div className="p-4 bg-gray-50 rounded-xl">
+                        <p className="text-sm font-medium text-gray-700">
+                          {imagePreviews.length} photo(s) attached
+                        </p>
+                      </div>
+                    )}
             </div>
 
-            {/* Submit Button */}
-            <div className="flex justify-end space-x-4 pt-6">
+                  <div className="mt-8 flex justify-between items-center">
               <button
                 type="button"
-                onClick={() => router.back()}
-                className="px-8 py-3 border border-gray-300 rounded-full font-semibold text-gray-700 hover:bg-gray-50 transition-all"
+                      onClick={() => setCurrentStep(3)}
+                      className="px-5 py-2.5 bg-gray-100 text-gray-700 rounded-lg font-semibold text-sm hover:bg-gray-200 transition-all"
               >
-                Cancel
+                      Back
               </button>
               <button
                 type="submit"
                 disabled={loading}
-                className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading ? 'Submitting...' : 'Submit Rating'}
+                      className="px-8 py-3 bg-gradient-to-r from-primary-600 via-primary-700 to-orange-600 text-white rounded-lg font-bold text-sm flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed hover:from-primary-700 hover:via-primary-800 hover:to-orange-700 transition-all shadow-lg hover:shadow-xl transform hover:scale-[1.02] active:scale-[0.98]"
+                    >
+                      {loading ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          <span>Submitting...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>Submit Review</span>
+                          <ArrowRight className="w-4 h-4" />
+                        </>
+                      )}
               </button>
+                  </div>
+                </div>
+              )}
+            </form>
+          </div>
+
+          {/* Right Panel - Info */}
+          <div className="hidden lg:block">
+            <div className="bg-white rounded-3xl shadow-xl p-8 border border-gray-100 sticky top-8">
+              <div className="text-5xl font-black bg-gradient-to-r from-primary-600 to-orange-600 bg-clip-text text-transparent mb-4">
+                {getCompletedSteps()}/{steps.length}
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900 mb-4">Review Progress</h3>
+              <p className="text-gray-600 leading-relaxed">
+                Complete all steps to submit your building review.
+              </p>
+              
+              <div className="mt-8 pt-8 border-t border-gray-200">
+                <div className="space-y-4">
+                  {steps.map((step, index) => (
+                    <div
+                      key={step.number}
+                      className={`flex items-center space-x-3 p-3 rounded-lg transition-all ${
+                        currentStep === step.number
+                          ? 'bg-primary-50 border-2 border-primary-200'
+                          : 'bg-gray-50'
+                      }`}
+                    >
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${
+                        currentStep === step.number
+                          ? 'bg-primary-600 text-white'
+                          : currentStep > step.number
+                          ? 'bg-primary-600 text-white'
+                          : 'bg-gray-300 text-gray-500'
+                      }`}>
+                        {currentStep > step.number ? '✓' : step.number}
+                      </div>
+                      <span className={`font-semibold ${
+                        currentStep === step.number ? 'text-primary-900' : 'text-gray-700'
+                      }`}>
+                        {step.title}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
-          </form>
+          </div>
         </div>
       </div>
-    </main>
+    </div>
   )
 }
 
+function RatingCard({ icon, label, rating, setRating, color }: any) {
+  const colorClasses = {
+    green: 'from-green-50 to-emerald-50 border-green-200',
+    blue: 'from-blue-50 to-cyan-50 border-blue-200',
+    orange: 'from-orange-50 to-amber-50 border-orange-200',
+    purple: 'from-purple-50 to-pink-50 border-purple-200',
+    pink: 'from-pink-50 to-rose-50 border-pink-200',
+    indigo: 'from-indigo-50 to-blue-50 border-indigo-200',
+  }
+
+  return (
+    <div className={`p-6 bg-gradient-to-br ${colorClasses[color as keyof typeof colorClasses]} rounded-2xl border-2 border-dashed hover:shadow-lg transition-all`}>
+      <div className="flex items-center space-x-3 mb-4">
+        <div className="text-gray-700">{icon}</div>
+        <label className="text-lg font-bold text-gray-900">{label}</label>
+      </div>
+      <div className="flex space-x-1">
+        {[1, 2, 3, 4, 5].map((star) => (
+          <button
+            key={star}
+            type="button"
+            onClick={() => setRating(star)}
+            className="focus:outline-none transition-all hover:scale-125 active:scale-95"
+          >
+            <Star className={`w-10 h-10 ${star <= rating ? 'text-yellow-400 fill-yellow-400 drop-shadow-md' : 'text-gray-300'}`} />
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}

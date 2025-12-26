@@ -1,8 +1,15 @@
 import { createClient } from '@supabase/supabase-js'
 
 // Get environment variables
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || ''
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+const DEFAULT_SUPABASE_URL = 'https://eehtzdpzbjsuendgwnwy.supabase.co'
+const DEFAULT_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVlaHR6ZHB6YmpzdWVuZGd3bnd5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAyNDQ5ODgsImV4cCI6MjA3NTgyMDk4OH0.4YjQFYHSPF2EVEqwk54ulaOkGYLvpogbSyfYKYbIOpQ'
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || DEFAULT_SUPABASE_URL
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error('❌ Missing Supabase configuration. Please set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY (or SUPABASE_URL / SUPABASE_ANON_KEY) environment variables.')
+}
 
 // Check if variables are set
 const isConfigured = supabaseUrl && supabaseAnonKey
@@ -52,13 +59,13 @@ export interface Neighborhood {
   slug?: string
   cover_image?: string
   user_id?: string
-  safety?: number
-  cleanliness?: number
-  noise?: number
-  community?: number
-  transit?: number
-  amenities?: number
-  average_rating: number
+  overall_rating?: number
+  safety_rating?: number
+  noise_rating?: number
+  transit_rating?: number
+  amenities_rating?: number
+  community_rating?: number
+  average_rating?: number
   images?: string[]
   total_ratings?: number
   total_reviews?: number
@@ -99,21 +106,21 @@ export interface NeighborhoodReview {
   id: string
   neighborhood_id: string
   user_id: string
-  safety: number
-  cleanliness: number
-  noise: number
-  community: number
-  transit: number
-  amenities: number
+  safety?: number
+  noise?: number
+  transit?: number
+  amenities?: number
+  community?: number
+  overall_rating?: number
   comment?: string
-  images: string[]
+  images?: string[]
   is_anonymous?: boolean
   display_name?: string
   status?: string
   helpful_count?: number
   not_helpful_count?: number
   created_at: string
-  updated_at: string
+  updated_at?: string
   user?: User
 }
 

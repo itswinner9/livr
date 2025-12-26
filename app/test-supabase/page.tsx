@@ -6,53 +6,94 @@ import { supabase } from '@/lib/supabase'
 export default function TestSupabase() {
   const [status, setStatus] = useState('Testing...')
   const [details, setDetails] = useState<any>({})
+  const [duration, setDuration] = useState<number | null>(null)
 
   useEffect(() => {
     testConnection()
   }, [])
 
   const testConnection = async () => {
+    const start = performance.now()
     const results: any = {
       env_url: process.env.NEXT_PUBLIC_SUPABASE_URL || 'MISSING',
       env_key: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'SET (length: ' + process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY.length + ')' : 'MISSING',
+      client_side_blocked: false,
+    }
+
+    const withTimeout = async <T,>(promise: Promise<T>, label: string, timeoutMs = 15000): Promise<T> => {
+      let timeoutId: NodeJS.Timeout
+      return new Promise<T>((resolve, reject) => {
+        timeoutId = setTimeout(() => {
+          const error = new Error(`${label} timed out after ${timeoutMs}ms`)
+          results[`${label}_timeout`] = true
+          results.client_side_blocked = true
+          reject(error)
+        }, timeoutMs)
+
+        promise
+          .then((value) => {
+            clearTimeout(timeoutId)
+            resolve(value)
+          })
+          .catch((error) => {
+            clearTimeout(timeoutId)
+            reject(error)
+          })
+      })
     }
 
     // Test 1: Can we reach Supabase?
     try {
-      const { data, error } = await supabase.from('user_profiles').select('count').limit(1)
+      const { data, error } = await withTimeout(
+        supabase.from('user_profiles').select('count').limit(1),
+        'database_connection'
+      )
       results.database_connection = error ? 'ERROR: ' + error.message : 'SUCCESS'
       results.database_error = error || null
+      results.database_rows = data || null
     } catch (e: any) {
-      results.database_connection = 'EXCEPTION: ' + e.message
+      results.database_connection = results.database_connection || 'EXCEPTION: ' + e.message
+      results.database_error = e?.message || e?.toString()
     }
 
     // Test 2: Can we check auth?
     try {
-      const { data: session } = await supabase.auth.getSession()
+      const { data: session } = await withTimeout(supabase.auth.getSession(), 'auth_check')
       results.auth_check = session ? 'SUCCESS' : 'NO SESSION'
+      results.auth_session = session || null
     } catch (e: any) {
-      results.auth_check = 'EXCEPTION: ' + e.message
+      results.auth_check = results.auth_check || 'EXCEPTION: ' + e.message
+      results.auth_check_error = e?.message || e?.toString()
     }
 
     // Test 3: Try a simple auth operation
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await withTimeout(supabase.auth.signInWithPassword({
         email: 'test@test.com',
         password: 'wrong',
-      })
+      }), 'auth_test')
       results.auth_test = error ? 'Expected error (good): ' + error.message : 'Unexpected success'
+      results.auth_test_response = { data, error }
     } catch (e: any) {
       results.auth_test = 'EXCEPTION: ' + e.message
+      results.auth_test_error = e?.message || e?.toString()
     }
 
+    const end = performance.now()
+    const totalDuration = Math.round(end - start)
+    results.duration_ms = totalDuration
+    results.user_agent = navigator.userAgent
+    setDuration(totalDuration)
     setDetails(results)
-    
+
     if (results.env_url === 'MISSING' || results.env_key === 'MISSING') {
       setStatus('❌ FAILED: Environment variables missing')
     } else if (results.database_connection && results.database_connection.includes('ERROR')) {
       setStatus('❌ FAILED: Cannot connect to database')
     } else if (results.auth_test && results.auth_test.includes('EXCEPTION')) {
       setStatus('❌ FAILED: Auth not working')
+    } else if (results.client_side_blocked) {
+      setStatus('⚠️ TIMEOUT: Browser or network blocked the Supabase request')
     } else {
       setStatus('✅ SUCCESS: Supabase is configured correctly')
     }
@@ -70,6 +111,11 @@ export default function TestSupabase() {
             'bg-yellow-100 text-yellow-800'
           }`}>
             {status}
+            {duration !== null && (
+              <div className="text-sm font-normal text-gray-600 mt-2">
+                Total duration: {duration} ms
+              </div>
+            )}
           </div>
 
           <div className="space-y-4">

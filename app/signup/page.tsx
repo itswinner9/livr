@@ -42,10 +42,10 @@ export default function SignUp() {
           data: {
             full_name: fullName,
           },
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
         },
       })
 
+      // ALWAYS reset loading, no matter what
       if (error) {
         console.error('❌ Signup error:', error)
         setError(error.message || 'Signup failed - please try again')
@@ -60,25 +60,81 @@ export default function SignUp() {
         return
       }
 
-      console.log('✅ Account created!', data.user)
-      console.log('Session:', data.session)
+      console.log('✅ Account created!', data.user.email)
+      alert('✅ Account created! You can now sign in.')
       
-      // Check if email confirmation is required
-      if (data.session) {
-        // User is automatically logged in (email confirmation disabled)
-        console.log('✅ Auto-logged in! Redirecting to home...')
-        alert('✅ Account created successfully!\n\nYou are now logged in.')
-        router.push('/')
-      } else {
-        // Email confirmation required
-        console.log('📧 Email confirmation required')
-        alert('✅ Account created!\n\n⚠️ Please check your email to confirm your account before logging in.')
-        router.push('/login')
-      }
+      // Keep loading true during redirect
+      window.location.href = '/login'
       
     } catch (error: any) {
       console.error('❌ Exception:', error)
       setError('Registration failed: ' + (error.message || 'Please try again'))
+      setLoading(false)
+    }
+  }
+
+  const handleGoogleSignUp = async () => {
+    setError('')
+    setLoading(true)
+
+    try {
+      console.log('🔐 Starting Google signup...')
+      
+      // Determine redirect URL - use current origin for flexibility
+      const getRedirectUrl = () => {
+        if (typeof window === 'undefined') {
+          return 'https://livrank.ca/auth/callback'
+        }
+        
+        // Use current origin, but allow override for production
+        const origin = window.location.origin
+        const isProduction = origin.includes('livrank.ca') || origin.includes('netlify.app')
+        
+        if (isProduction) {
+          return 'https://livrank.ca/auth/callback'
+        }
+        
+        // For local development
+        return `${origin}/auth/callback`
+      }
+      
+      const redirectUrl = getRedirectUrl()
+      
+      console.log('🔗 Redirect URL:', redirectUrl)
+      console.log('🔗 Current origin:', typeof window !== 'undefined' ? window.location.origin : 'N/A')
+      
+      const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: redirectUrl,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
+        },
+      })
+
+      if (oauthError) {
+        console.error('❌ Google signup error:', oauthError)
+        setError(oauthError.message || 'Failed to sign up with Google')
+        setLoading(false)
+        return
+      }
+
+      // If data.url exists, it means we need to redirect manually (PKCE flow)
+      if (data?.url) {
+        console.log('🔗 Redirecting to OAuth URL:', data.url)
+        window.location.href = data.url
+        // Don't set loading to false - we're redirecting
+        return
+      }
+
+      // If no URL, wait a moment for redirect
+      console.log('⏳ Waiting for OAuth redirect...')
+      
+    } catch (error: any) {
+      console.error('❌ Exception during Google signup:', error)
+      setError('Failed to sign up with Google: ' + (error.message || 'Unknown error'))
       setLoading(false)
     }
   }
@@ -189,9 +245,16 @@ export default function SignUp() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-gray-900 hover:bg-gray-800 text-white font-medium py-3 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-gradient-to-r from-primary-600 via-primary-700 to-orange-600 hover:from-primary-700 hover:via-primary-800 hover:to-orange-700 text-white font-bold py-3 px-4 rounded-lg transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center space-x-2"
             >
-              {loading ? 'Creating Account...' : 'Create Account'}
+              {loading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span>Creating Account...</span>
+                </>
+              ) : (
+                'Create Account'
+              )}
             </button>
 
             <div className="relative">
@@ -205,7 +268,9 @@ export default function SignUp() {
 
             <button
               type="button"
-              className="w-full bg-white border border-gray-300 text-gray-700 font-medium py-3 px-4 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center space-x-2"
+              onClick={handleGoogleSignUp}
+              disabled={loading}
+              className="w-full bg-white border border-gray-300 text-gray-700 font-medium py-3 px-4 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>

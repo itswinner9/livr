@@ -1,15 +1,29 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Production build optimization
-  output: 'standalone',
+  env: {
+    NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || 'https://eehtzdpzbjsuendgwnwy.supabase.co',
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVlaHR6ZHB6YmpzdWVuZGd3bnd5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAyNDQ5ODgsImV4cCI6MjA3NTgyMDk4OH0.4YjQFYHSPF2EVEqwk54ulaOkGYLvpogbSyfYKYbIOpQ',
+    NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL || process.env.SITE_URL || 'https://livrank.ca',
+  },
+  // Note: 'standalone' output is for self-hosting, not Netlify
+  // Netlify uses the @netlify/plugin-nextjs which handles this automatically
+  // output: 'standalone',
   
   // Image optimization
   images: {
-    domains: [
-      'eehtzdpzbjsuendgwnwy.supabase.co',
-      'tqxomrvaiaidblwdvonu.supabase.co',
-      'livrank.ca',
-      'www.livrank.ca'
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '**.supabase.co',
+      },
+      {
+        protocol: 'https',
+        hostname: 'livrank.ca',
+      },
+      {
+        protocol: 'https',
+        hostname: 'www.livrank.ca',
+      },
     ],
     formats: ['image/avif', 'image/webp'],
   },

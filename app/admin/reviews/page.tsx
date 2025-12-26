@@ -32,47 +32,53 @@ export default function AdminReviewsPage() {
 
   const fetchPendingReviews = async () => {
     try {
-      // Fast parallel fetch from all review tables with minimal data
+      // Fetch ALL pending reviews (no limit) from all review tables
       const [neighborhoodData, buildingData, landlordData, rentCompanyData] = await Promise.all([
         supabase.from('neighborhood_reviews')
-          .select('id, neighborhood_id, user_id, title, review, overall_rating, created_at, status, neighborhoods!inner(name), user_profiles!inner(display_name)')
+          .select('id, neighborhood_id, user_id, title, review, overall_rating, created_at, status, neighborhoods!inner(name), user_profiles!inner(email)')
           .eq('status', 'pending')
-          .limit(50),
+          .order('created_at', { ascending: false }),
         
         supabase.from('building_reviews')
-          .select('id, building_id, user_id, title, review, overall_rating, created_at, status, buildings!inner(name), user_profiles!inner(display_name)')
+          .select('id, building_id, user_id, title, review, overall_rating, created_at, status, buildings!inner(name), user_profiles!inner(email)')
           .eq('status', 'pending')
-          .limit(50),
+          .order('created_at', { ascending: false }),
         
         supabase.from('landlord_reviews')
-          .select('id, landlord_id, user_id, title, review, overall_rating, created_at, status, landlords!inner(name), user_profiles!inner(display_name)')
+          .select('id, landlord_id, user_id, title, review, comment, overall_rating, created_at, status, landlords!inner(name), user_profiles!inner(email)')
           .eq('status', 'pending')
-          .limit(50),
+          .order('created_at', { ascending: false }),
         
         supabase.from('rent_company_reviews')
-          .select('id, rent_company_id, user_id, title, review, overall_rating, created_at, status, rent_companies!inner(name), user_profiles!inner(display_name)')
+          .select('id, rent_company_id, user_id, title, review, overall_rating, created_at, status, rent_companies!inner(name), user_profiles!inner(email)')
           .eq('status', 'pending')
-          .limit(50)
+          .order('created_at', { ascending: false })
       ])
+
+      // Log results for debugging
+      console.log('📊 Neighborhood reviews:', neighborhoodData.data?.length || 0)
+      console.log('📊 Building reviews:', buildingData.data?.length || 0)
+      console.log('📊 Landlord reviews:', landlordData.data?.length || 0)
+      console.log('📊 Rent company reviews:', rentCompanyData.data?.length || 0)
 
       const allReviews: PendingReview[] = []
       
       // Fast processing - direct mapping
       neighborhoodData.data?.forEach((r: any) => allReviews.push({
         id: r.id, review_type: 'neighborhood', entity_name: r.neighborhoods.name, entity_id: r.neighborhood_id,
-        user_name: r.user_profiles.display_name, title: r.title, review: r.review, overall_rating: r.overall_rating, created_at: r.created_at, status: r.status
+        user_name: r.user_profiles.email, title: r.title, review: r.review, overall_rating: r.overall_rating, created_at: r.created_at, status: r.status
       }))
       buildingData.data?.forEach((r: any) => allReviews.push({
         id: r.id, review_type: 'building', entity_name: r.buildings.name, entity_id: r.building_id,
-        user_name: r.user_profiles.display_name, title: r.title, review: r.review, overall_rating: r.overall_rating, created_at: r.created_at, status: r.status
+        user_name: r.user_profiles.email, title: r.title, review: r.review, overall_rating: r.overall_rating, created_at: r.created_at, status: r.status
       }))
       landlordData.data?.forEach((r: any) => allReviews.push({
         id: r.id, review_type: 'landlord', entity_name: r.landlords.name, entity_id: r.landlord_id,
-        user_name: r.user_profiles.display_name, title: r.title, review: r.review, overall_rating: r.overall_rating, created_at: r.created_at, status: r.status
+        user_name: r.user_profiles.email, title: r.title, review: r.comment || r.review || '', overall_rating: r.overall_rating, created_at: r.created_at, status: r.status
       }))
       rentCompanyData.data?.forEach((r: any) => allReviews.push({
         id: r.id, review_type: 'rent_company', entity_name: r.rent_companies.name, entity_id: r.rent_company_id,
-        user_name: r.user_profiles.display_name, title: r.title, review: r.review, overall_rating: r.overall_rating, created_at: r.created_at, status: r.status
+        user_name: r.user_profiles.email, title: r.title, review: r.review, overall_rating: r.overall_rating, created_at: r.created_at, status: r.status
       }))
       
       setReviews(allReviews)
@@ -112,6 +118,9 @@ export default function AdminReviewsPage() {
         return
       }
 
+      console.log('✅ Review approved successfully')
+      alert('✅ Review approved! It is now visible to all users.')
+
       // Refresh the list
       await fetchPendingReviews()
       setSelectedReview(null)
@@ -124,6 +133,11 @@ export default function AdminReviewsPage() {
   }
 
   const handleReject = async (reviewId: string, reviewType: string) => {
+    if (!adminNotes.trim()) {
+      alert('⚠️ Please add admin notes explaining why this review is being rejected.')
+      return
+    }
+
     setActionLoading(reviewId)
     try {
       const { data: { user } } = await supabase.auth.getUser()
@@ -151,6 +165,9 @@ export default function AdminReviewsPage() {
         alert('Error rejecting review: ' + error.message)
         return
       }
+
+      console.log('✅ Review rejected successfully')
+      alert('❌ Review rejected. It will not be visible to users.')
 
       // Refresh the list
       await fetchPendingReviews()
@@ -201,10 +218,47 @@ export default function AdminReviewsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-primary-200 rounded-full animate-spin border-t-primary-500 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading pending reviews...</p>
+      <div className="min-h-screen bg-gray-50 p-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="mb-8">
+            <div className="h-10 bg-gray-200 rounded-xl w-72 mb-3 animate-pulse"></div>
+            <div className="h-6 bg-gray-200 rounded-lg w-96 animate-pulse"></div>
+          </div>
+
+          {/* Stats skeleton */}
+          <div className="grid grid-cols-4 gap-6 mb-8">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="h-28 bg-white rounded-2xl shadow-lg animate-pulse"></div>
+            ))}
+          </div>
+
+          {/* Filters skeleton */}
+          <div className="bg-white rounded-xl p-4 mb-6 animate-pulse">
+            <div className="h-10 bg-gray-200 rounded-lg w-full"></div>
+          </div>
+
+          {/* Review cards skeleton */}
+          <div className="space-y-4">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="bg-white rounded-2xl p-6 shadow-lg animate-pulse">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center space-x-4">
+                    <div className="w-14 h-14 bg-gray-200 rounded-xl"></div>
+                    <div>
+                      <div className="h-5 bg-gray-200 rounded w-64 mb-2"></div>
+                      <div className="h-4 bg-gray-200 rounded w-48"></div>
+                    </div>
+                  </div>
+                  <div className="h-7 bg-gray-200 rounded-full w-24"></div>
+                </div>
+                <div className="h-24 bg-gray-200 rounded-xl mb-4"></div>
+                <div className="flex space-x-3">
+                  <div className="h-10 bg-gray-200 rounded-lg flex-1"></div>
+                  <div className="h-10 bg-gray-200 rounded-lg flex-1"></div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     )

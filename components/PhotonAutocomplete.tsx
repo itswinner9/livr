@@ -73,7 +73,7 @@ export default function PhotonAutocomplete({
       // Use Photon API (free, no API key needed!)
       // Add Canada bias by using coordinates
       const response = await fetch(
-        `https://photon.komoot.io/api/?q=${encodeURIComponent(searchQuery + ' Canada')}&limit=15&lang=en&lat=56.1304&lon=-106.3468`,
+        `https://photon.komoot.io/api/?q=${encodeURIComponent(searchQuery + ' Canada')}&limit=20&lang=en&lat=56.1304&lon=-106.3468`,
         { 
           signal: AbortSignal.timeout(8000),
           headers: {
@@ -90,11 +90,35 @@ export default function PhotonAutocomplete({
       const data = await response.json()
       console.log('✅ Photon results:', data.features?.length || 0)
       
-      // Filter for Canada and remove duplicates
-      const canadianResults = (data.features || []).filter((feature: PhotonFeature) => {
+      // Filter for Canada first
+      let canadianResults = (data.features || []).filter((feature: PhotonFeature) => {
         const country = feature.properties.country
         return country === 'Canada' || country === 'CA'
       })
+      
+      // Additional filtering for neighborhood searches
+      if (type === 'neighborhood') {
+        canadianResults = canadianResults.filter((feature: PhotonFeature) => {
+          const props = feature.properties
+          // Filter out specific street addresses with house numbers
+          // Keep neighborhoods, districts, places, cities
+          if (props.housenumber) {
+            return false // Remove specific addresses
+          }
+          
+          // Keep if it's a place type (neighborhood, suburb, city, etc.)
+          if (props.osm_key === 'place') {
+            return true
+          }
+          
+          // Keep if no street is specified (likely an area/neighborhood)
+          if (!props.street) {
+            return true
+          }
+          
+          return false
+        })
+      }
       
       console.log('🇨🇦 Canadian results:', canadianResults.length)
       

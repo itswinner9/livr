@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Mail, Lock, Star, AlertTriangle } from 'lucide-react'
 import { supabase, supabaseConfigured } from '@/lib/supabase'
+import { withTimeout } from '@/lib/supabaseSafe'
 import CanadianSkyscrapers from '@/components/CanadianSkyscrapers'
 
 export default function Login() {
@@ -21,7 +22,24 @@ export default function Login() {
       setConfigError(true)
       console.error('❌ Supabase is NOT configured! Check .env.local and restart server.')
     }
-  }, [])
+
+    // Check if already logged in
+    const checkSession = async () => {
+      try {
+        const sessionResult = await withTimeout(
+          () => supabase.auth.getSession(),
+          5000
+        )
+        const { data: { session } } = sessionResult
+        if (session) {
+          router.push('/')
+        }
+      } catch {
+        // Timeout or error - continue to login form
+      }
+    }
+    checkSession()
+  }, [router])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -31,34 +49,129 @@ export default function Login() {
     try {
       console.log('🔐 Starting login for:', email)
       
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
+      // Use withTimeout correctly - pass a function that creates the promise
+      const loginResult = await withTimeout(
+        () => supabase.auth.signInWithPassword({
+          email,
+          password,
+        }),
+        15000
+      )
+      
+      const { data, error: loginError } = loginResult
 
-      // ALWAYS reset loading, no matter what
-      if (error) {
-        console.error('❌ Login error:', error)
-        setError(error.message || 'Invalid email or password')
+      if (loginError) {
+        console.error('❌ Login error:', loginError)
+        setError(loginError.message || 'Invalid email or password')
         setLoading(false)
         return
       }
 
-      if (!data.session) {
+      if (!data?.session) {
         console.error('❌ No session returned')
         setError('Login failed - please try again')
         setLoading(false)
         return
       }
 
-      console.log('✅ Login successful! Redirecting...')
+      console.log('✅ Login successful! User:', data.session.user.email)
       
-      // Keep loading true during redirect
+      // Wait briefly for session to be stored
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
+      // Verify session exists with timeout
+      const sessionResult = await withTimeout(
+        () => supabase.auth.getSession(),
+        8000
+      )
+      
+      const { data: sessionData, error: verifyError } = sessionResult
+      
+      if (verifyError || !sessionData?.session) {
+        console.error('❌ Session verification failed:', verifyError)
+        setError('Session not established - please try again')
+        setLoading(false)
+        return
+      }
+
+      console.log('✅ Session verified! Redirecting...')
+      
+      // Force a full page reload to ensure session is properly loaded
       window.location.href = '/'
       
     } catch (error: any) {
       console.error('❌ Exception:', error)
-      setError('Login failed: ' + (error.message || 'Please try again'))
+      if (error.message?.includes('timed out') || error.name === 'TimeoutError') {
+        setError('Login timed out. Please check your connection and try again.')
+      } else {
+        setError('Login failed: ' + (error.message || 'Please try again'))
+      }
+      setLoading(false)
+    }
+  }
+
+  const handleGoogleLogin = async () => {
+    setError('')
+    setLoading(true)
+
+    try {
+      console.log('🔐 Starting Google login...')
+      
+      // Determine redirect URL - use current origin for flexibility
+      const getRedirectUrl = () => {
+        if (typeof window === 'undefined') {
+          return 'https://livrank.ca/auth/callback'
+        }
+        
+        // Use current origin, but allow override for production
+        const origin = window.location.origin
+        const isProduction = origin.includes('livrank.ca') || origin.includes('netlify.app')
+        
+        if (isProduction) {
+          return 'https://livrank.ca/auth/callback'
+        }
+        
+        // For local development
+        return `${origin}/auth/callback`
+      }
+      
+      const redirectUrl = getRedirectUrl()
+      
+      console.log('🔗 Redirect URL:', redirectUrl)
+      console.log('🔗 Current origin:', typeof window !== 'undefined' ? window.location.origin : 'N/A')
+      
+      const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: redirectUrl,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
+        },
+      })
+
+      if (oauthError) {
+        console.error('❌ Google login error:', oauthError)
+        setError(oauthError.message || 'Failed to sign in with Google')
+        setLoading(false)
+        return
+      }
+
+      // If data.url exists, it means we need to redirect manually (PKCE flow)
+      if (data?.url) {
+        console.log('🔗 Redirecting to OAuth URL:', data.url)
+        window.location.href = data.url
+        // Don't set loading to false - we're redirecting
+        return
+      }
+
+      // If no URL, wait a moment for redirect
+      console.log('⏳ Waiting for OAuth redirect...')
+      
+    } catch (error: any) {
+      console.error('❌ Exception during Google login:', error)
+      setError('Failed to sign in with Google: ' + (error.message || 'Unknown error'))
       setLoading(false)
     }
   }
@@ -125,6 +238,7 @@ export default function Login() {
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all"
                   placeholder="Enter your email"
+                  style={{ fontSize: '16px' }}
                 />
               </div>
             </div>
@@ -142,24 +256,25 @@ export default function Login() {
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all"
                   placeholder="Enter your password"
+                  style={{ fontSize: '16px' }}
                 />
               </div>
             </div>
 
-                 <div className="flex items-center justify-between">
-                   <label className="flex items-center">
-                     <input type="checkbox" className="rounded border-gray-300 text-primary-500 focus:ring-primary-500" />
-                     <span className="ml-2 text-sm text-gray-600">Remember me</span>
-                   </label>
-                   <Link href="/forgot-password" className="text-sm text-primary-500 hover:text-primary-600">
-                     Forgot Password?
-                   </Link>
-                 </div>
+            <div className="flex items-center justify-between">
+              <label className="flex items-center">
+                <input type="checkbox" className="rounded border-gray-300 text-primary-500 focus:ring-primary-500" />
+                <span className="ml-2 text-sm text-gray-600">Remember me</span>
+              </label>
+              <Link href="/forgot-password" className="text-sm text-primary-500 hover:text-primary-600">
+                Forgot Password?
+              </Link>
+            </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-gray-900 hover:bg-gray-800 text-white font-medium py-3 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-gradient-to-r from-primary-600 via-primary-700 to-orange-600 hover:from-primary-700 hover:via-primary-800 hover:to-orange-700 text-white font-bold py-3 px-4 rounded-lg transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
             >
               {loading ? (
                 <div className="flex items-center justify-center space-x-2">
@@ -182,7 +297,9 @@ export default function Login() {
 
             <button
               type="button"
-              className="w-full bg-white border border-gray-300 text-gray-700 font-medium py-3 px-4 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center space-x-2"
+              onClick={handleGoogleLogin}
+              disabled={loading}
+              className="w-full bg-white border border-gray-300 text-gray-700 font-medium py-3 px-4 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24">
                 <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -207,4 +324,3 @@ export default function Login() {
     </main>
   )
 }
-
