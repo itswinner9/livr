@@ -116,19 +116,6 @@ export async function GET(request: NextRequest) {
           return []
         })
       )
-          if (error) {
-            console.error('❌ Error fetching neighborhoods:', error.message || error)
-            throw error // Re-throw to be caught by safeSupabaseRequest
-          }
-          console.log(`✅ Neighborhoods fetched: ${data?.length || 0} items`)
-          if (data) results.neighborhoods = data
-          return data
-        }).catch((err: any) => {
-          console.error('❌ Neighborhoods query exception:', err.message || err)
-          results.neighborhoods = [] // Ensure empty array on error
-          return []
-        })
-      )
     }
 
     // Fetch buildings
@@ -208,7 +195,7 @@ export async function GET(request: NextRequest) {
   if (result.error) {
     console.error('❌ Explore API error:', result.error.message, result.error)
     return NextResponse.json(
-      { 
+      {
         error: result.error.message || 'Failed to fetch data',
         details: result.error.details,
         code: result.error.code,
@@ -232,7 +219,7 @@ export async function GET(request: NextRequest) {
   })
 
   const response = NextResponse.json(responseData)
-  
+
   // Add caching headers for better performance
   response.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=120')
   return response
