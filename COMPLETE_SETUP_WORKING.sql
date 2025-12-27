@@ -419,32 +419,62 @@ CREATE TABLE IF NOT EXISTS landlord_reviews (
   UNIQUE(landlord_id, user_id)
 );
 
+-- Clean up orphaned reviews before adding foreign key constraints
+DO $$
+DECLARE
+  orphaned_count INTEGER;
+BEGIN
+  -- Count orphaned reviews
+  SELECT COUNT(*) INTO orphaned_count
+  FROM landlord_reviews lr
+  WHERE NOT EXISTS (
+    SELECT 1 FROM landlords l WHERE l.id = lr.landlord_id
+  );
+  
+  -- Delete orphaned reviews if any exist
+  IF orphaned_count > 0 THEN
+    DELETE FROM landlord_reviews
+    WHERE NOT EXISTS (
+      SELECT 1 FROM landlords l WHERE l.id = landlord_reviews.landlord_id
+    );
+    RAISE NOTICE 'Deleted % orphaned landlord review(s) before adding foreign key constraint', orphaned_count;
+  END IF;
+END $$;
+
 -- Add foreign key constraints explicitly after table creation
 DO $$
 BEGIN
-  -- Add landlord_id foreign key constraint
-  IF NOT EXISTS (
+  -- Drop existing constraint if it exists to recreate it
+  IF EXISTS (
     SELECT 1 FROM pg_constraint 
     WHERE conname = 'landlord_reviews_landlord_id_fkey'
   ) THEN
-    ALTER TABLE landlord_reviews 
-    ADD CONSTRAINT landlord_reviews_landlord_id_fkey 
-    FOREIGN KEY (landlord_id) 
-    REFERENCES landlords(id) 
-    ON DELETE CASCADE;
+    ALTER TABLE landlord_reviews DROP CONSTRAINT landlord_reviews_landlord_id_fkey;
   END IF;
   
-  -- Add user_id foreign key constraint
-  IF NOT EXISTS (
+  -- Add landlord_id foreign key constraint
+  ALTER TABLE landlord_reviews 
+  ADD CONSTRAINT landlord_reviews_landlord_id_fkey 
+  FOREIGN KEY (landlord_id) 
+  REFERENCES landlords(id) 
+  ON DELETE CASCADE;
+  
+  -- Drop and recreate user_id constraint if needed
+  IF EXISTS (
     SELECT 1 FROM pg_constraint 
     WHERE conname = 'landlord_reviews_user_id_fkey'
   ) THEN
-    ALTER TABLE landlord_reviews 
-    ADD CONSTRAINT landlord_reviews_user_id_fkey 
-    FOREIGN KEY (user_id) 
-    REFERENCES user_profiles(id) 
-    ON DELETE CASCADE;
+    ALTER TABLE landlord_reviews DROP CONSTRAINT landlord_reviews_user_id_fkey;
   END IF;
+  
+  -- Add user_id foreign key constraint
+  ALTER TABLE landlord_reviews 
+  ADD CONSTRAINT landlord_reviews_user_id_fkey 
+  FOREIGN KEY (user_id) 
+  REFERENCES user_profiles(id) 
+  ON DELETE CASCADE;
+  
+  RAISE NOTICE 'Successfully added foreign key constraints to landlord_reviews';
 END $$;
 
 DO $$
