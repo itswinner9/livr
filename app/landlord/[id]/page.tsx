@@ -503,7 +503,7 @@ export default function LandlordPage() {
             {/* Reviews Header */}
             <div className="mb-6">
               <h2 className="text-xl font-bold text-gray-900 mb-1">Reviews</h2>
-              <p className="text-sm text-gray-600">{landlord.total_reviews || 0} {landlord.total_reviews === 1 ? 'review' : 'reviews'}</p>
+              <p className="text-sm text-gray-600">{reviews.length || 0} {reviews.length === 1 ? 'review' : 'reviews'}</p>
             </div>
 
             {/* Pending Reviews Notice */}
