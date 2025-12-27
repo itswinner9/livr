@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase'
 import type { Neighborhood, Building } from '@/lib/supabase'
 import RateModal from '@/components/RateModal'
 import PropertyCard from '@/components/PropertyCard'
+import { HomepageSkeleton, InlineSpinner } from '@/components/LoadingStates'
 
 export default function Home() {
   const router = useRouter()
@@ -30,6 +31,7 @@ export default function Home() {
     totalReviews: 0,
     totalLocations: 0
   })
+  const [initialLoading, setInitialLoading] = useState(true)
 
   // Ripple states
   const [ripples, setRipples] = useState<Array<{ id: number; x: number; y: number; size: number }>>([])
@@ -69,9 +71,12 @@ export default function Home() {
     // Wrap in try-catch to prevent unhandled errors
     const loadData = async () => {
       try {
+        setInitialLoading(true)
         await Promise.all([fetchTopRated(), fetchStats()])
       } catch (error) {
         console.error('Error loading data:', error)
+      } finally {
+        setInitialLoading(false)
       }
     }
     loadData()
@@ -182,75 +187,42 @@ export default function Home() {
 
   const fetchTopRated = async () => {
     try {
-      console.log('🔍 Fetching all categories...')
-      
-      // Fetch ALL neighborhoods, sort by rating and reviews
-      const { data: neighborhoods, error: nError } = await supabase
-        .from('neighborhoods')
-        .select('*')
-        .order('overall_rating', { ascending: false })
-        .order('total_reviews', { ascending: false })
-        .order('created_at', { ascending: false })
-        .limit(12)
+      // Fetch all categories in parallel for better performance - only select needed fields
+      const [neighborhoodsResult, buildingsResult, landlordsResult, rentCompaniesResult] = await Promise.all([
+        supabase
+          .from('neighborhoods')
+          .select('id, name, slug, city, province, overall_rating, total_reviews, cover_image, created_at')
+          .order('overall_rating', { ascending: false })
+          .order('total_reviews', { ascending: false })
+          .order('created_at', { ascending: false })
+          .limit(12),
+        supabase
+          .from('buildings')
+          .select('id, name, slug, city, province, overall_rating, total_reviews, cover_image, created_at')
+          .order('overall_rating', { ascending: false })
+          .order('total_reviews', { ascending: false })
+          .order('created_at', { ascending: false })
+          .limit(12),
+        supabase
+          .from('landlords')
+          .select('id, name, slug, city, province, overall_rating, total_reviews, profile_image, created_at')
+          .order('overall_rating', { ascending: false })
+          .order('total_reviews', { ascending: false })
+          .order('created_at', { ascending: false })
+          .limit(12),
+        supabase
+          .from('rent_companies')
+          .select('id, name, slug, city, province, overall_rating, total_reviews, profile_image, created_at')
+          .order('overall_rating', { ascending: false })
+          .order('total_reviews', { ascending: false })
+          .order('created_at', { ascending: false })
+          .limit(12)
+      ])
 
-      if (nError) {
-        console.error('❌ Error fetching neighborhoods:', nError)
-        setTopNeighborhoods([])
-      } else {
-        console.log('✅ Fetched neighborhoods:', neighborhoods?.length || 0)
-        setTopNeighborhoods(neighborhoods || [])
-      }
-
-      // Fetch ALL buildings, sort by rating and reviews
-      const { data: buildings, error: bError } = await supabase
-        .from('buildings')
-        .select('*')
-        .order('overall_rating', { ascending: false })
-        .order('total_reviews', { ascending: false })
-        .order('created_at', { ascending: false })
-        .limit(12)
-
-      if (bError) {
-        console.error('❌ Error fetching buildings:', bError)
-        setTopBuildings([])
-      } else {
-        console.log('✅ Fetched buildings:', buildings?.length || 0)
-        setTopBuildings(buildings || [])
-      }
-
-      // Fetch ALL landlords, sort by rating and reviews
-      const { data: landlords, error: lError } = await supabase
-        .from('landlords')
-        .select('*')
-        .order('overall_rating', { ascending: false })
-        .order('total_reviews', { ascending: false })
-        .order('created_at', { ascending: false })
-        .limit(12)
-
-      if (lError) {
-        console.error('❌ Error fetching landlords:', lError)
-        setTopLandlords([])
-      } else {
-        console.log('✅ Fetched landlords:', landlords?.length || 0)
-        setTopLandlords(landlords || [])
-      }
-
-      // Fetch ALL rent companies, sort by rating and reviews
-      const { data: rentCompanies, error: rError } = await supabase
-        .from('rent_companies')
-        .select('*')
-        .order('overall_rating', { ascending: false })
-        .order('total_reviews', { ascending: false })
-        .order('created_at', { ascending: false })
-        .limit(12)
-
-      if (rError) {
-        console.error('❌ Error fetching rent companies:', rError)
-        setTopRentCompanies([])
-      } else {
-        console.log('✅ Fetched rent companies:', rentCompanies?.length || 0)
-        setTopRentCompanies(rentCompanies || [])
-      }
+      setTopNeighborhoods(neighborhoodsResult.data || [])
+      setTopBuildings(buildingsResult.data || [])
+      setTopLandlords(landlordsResult.data || [])
+      setTopRentCompanies(rentCompaniesResult.data || [])
     } catch (error) {
       console.error('❌ Error in fetchTopRated:', error)
       setTopNeighborhoods([])
@@ -1111,6 +1083,7 @@ export default function Home() {
               </div>
             ))}
           </div>
+          )}
 
           {/* View All Button */}
           <div className="text-center mt-16 animate-fade-in-up animation-delay-400">

@@ -22,17 +22,17 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid session' }, { status: 401 })
   }
 
-  // Fetch profile with timeout
+  // Fetch profile with timeout - only select needed fields
   const result = await safeSupabaseRequest(async () => {
     const { data, error } = await supabase
       .from('user_profiles')
-      .select('*')
+      .select('id, email, display_name, avatar_url, is_verified_tenant, is_admin, created_at, updated_at')
       .eq('id', user.id)
       .single()
 
     if (error) throw error
     return data
-  }, { timeoutMs: 8000, retries: 1 })
+  }, { timeoutMs: 5000, retries: 0 })
 
   if (result.timedOut) {
     return NextResponse.json(
@@ -48,12 +48,16 @@ export async function GET(request: NextRequest) {
     )
   }
 
-  return NextResponse.json({
+  const response = NextResponse.json({
     user: {
       id: user.id,
       email: user.email,
     },
     profile: result.data,
   })
+  
+  // Cache for authenticated users (shorter cache)
+  response.headers.set('Cache-Control', 'private, max-age=30, stale-while-revalidate=60')
+  return response
 }
 

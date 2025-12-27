@@ -22,24 +22,58 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid session' }, { status: 401 })
   }
 
-  // Fetch all reviews with joins (much faster than sequential queries)
+  // Fetch all reviews with joins in parallel - optimized with only needed fields
   const result = await safeSupabaseRequest(async () => {
     const allReviews: any[] = []
 
-    // Fetch neighborhood reviews with join
-    const { data: nReviews, error: nError } = await supabase
-      .from('neighborhood_reviews')
-      .select(`
-        *,
-        neighborhood:neighborhoods(*)
-      `)
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
+    // Fetch all reviews in parallel for better performance
+    const [nReviewsResult, bReviewsResult, lReviewsResult, cReviewsResult] = await Promise.all([
+      supabase
+        .from('neighborhood_reviews')
+        .select(`
+          id, user_id, overall_rating, comment, created_at, images,
+          neighborhood:neighborhoods(id, name, slug, city, province)
+        `)
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(50),
+      supabase
+        .from('building_reviews')
+        .select(`
+          id, user_id, overall_rating, comment, created_at, images,
+          building:buildings(id, name, slug, city, province)
+        `)
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(50),
+      supabase
+        .from('landlord_reviews')
+        .select(`
+          id, user_id, overall_rating, comment, created_at, images,
+          landlord:landlords(id, name, slug, city)
+        `)
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(50),
+      supabase
+        .from('rent_company_reviews')
+        .select(`
+          id, user_id, overall_rating, comment, created_at, images,
+          company:rent_companies(id, name, slug, city)
+        `)
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(50)
+    ])
 
-    if (nError) throw nError
+    if (nReviewsResult.error) throw nReviewsResult.error
+    if (bReviewsResult.error) throw bReviewsResult.error
+    if (lReviewsResult.error) throw lReviewsResult.error
+    if (cReviewsResult.error) throw cReviewsResult.error
 
-    if (nReviews) {
-      for (const review of nReviews) {
+    // Process neighborhood reviews
+    if (nReviewsResult.data) {
+      for (const review of nReviewsResult.data) {
         allReviews.push({
           ...review,
           type: 'neighborhood',
@@ -49,20 +83,9 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Fetch building reviews with join
-    const { data: bReviews, error: bError } = await supabase
-      .from('building_reviews')
-      .select(`
-        *,
-        building:buildings(*)
-      `)
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-
-    if (bError) throw bError
-
-    if (bReviews) {
-      for (const review of bReviews) {
+    // Process building reviews
+    if (bReviewsResult.data) {
+      for (const review of bReviewsResult.data) {
         allReviews.push({
           ...review,
           type: 'building',
@@ -72,20 +95,9 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Fetch landlord reviews with join
-    const { data: lReviews, error: lError } = await supabase
-      .from('landlord_reviews')
-      .select(`
-        *,
-        landlord:landlords(*)
-      `)
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-
-    if (lError) throw lError
-
-    if (lReviews) {
-      for (const review of lReviews) {
+    // Process landlord reviews
+    if (lReviewsResult.data) {
+      for (const review of lReviewsResult.data) {
         allReviews.push({
           ...review,
           type: 'landlord',
@@ -95,20 +107,9 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Fetch company reviews with join
-    const { data: cReviews, error: cError } = await supabase
-      .from('rent_company_reviews')
-      .select(`
-        *,
-        company:rent_companies(*)
-      `)
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-
-    if (cError) throw cError
-
-    if (cReviews) {
-      for (const review of cReviews) {
+    // Process company reviews
+    if (cReviewsResult.data) {
+      for (const review of cReviewsResult.data) {
         allReviews.push({
           ...review,
           type: 'company',
@@ -126,7 +127,7 @@ export async function GET(request: NextRequest) {
     })
 
     return allReviews
-  }, { timeoutMs: 15000, retries: 1 })
+  }, { timeoutMs: 6000, retries: 0 })
 
   if (result.timedOut) {
     return NextResponse.json(
@@ -142,6 +143,8 @@ export async function GET(request: NextRequest) {
     )
   }
 
-  return NextResponse.json({ reviews: result.data || [] })
+  const response = NextResponse.json({ reviews: result.data || [] })
+  response.headers.set('Cache-Control', 'private, max-age=30, stale-while-revalidate=60')
+  return response
 }
 

@@ -26,8 +26,8 @@ export interface SafeRequestOptions {
   retries?: number
 }
 
-const DEFAULT_TIMEOUT = 10_000
-const DEFAULT_RETRIES = 1
+const DEFAULT_TIMEOUT = 5_000 // Reduced default timeout for faster failures
+const DEFAULT_RETRIES = 0 // No retries by default for faster response
 
 export function withTimeout<T>(
   promiseFactory: () => Promise<T>,

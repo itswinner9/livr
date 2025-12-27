@@ -7,6 +7,7 @@ import { Mail, Lock, Star, AlertTriangle } from 'lucide-react'
 import { supabase, supabaseConfigured } from '@/lib/supabase'
 import { withTimeout } from '@/lib/supabaseSafe'
 import CanadianSkyscrapers from '@/components/CanadianSkyscrapers'
+import { ButtonLoader, PageLoader } from '@/components/LoadingStates'
 
 export default function Login() {
   const router = useRouter()
@@ -278,7 +279,7 @@ export default function Login() {
             >
               {loading ? (
                 <div className="flex items-center justify-center space-x-2">
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <ButtonLoader size="sm" />
                   <span>Signing in...</span>
                 </div>
               ) : (

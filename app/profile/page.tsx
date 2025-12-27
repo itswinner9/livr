@@ -201,14 +201,8 @@ export default function ProfilePage() {
   }
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-6">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* Header Skeleton */}
-          <div className="mb-6 animate-pulse">
-            <div className="h-9 bg-gray-200 rounded-xl w-48 mb-2"></div>
-            <div className="h-5 bg-gray-200 rounded-lg w-64"></div>
-          </div>
+    return <ProfileSkeleton />
+  }
 
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
             {/* Sidebar Skeleton */}

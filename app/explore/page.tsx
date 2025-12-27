@@ -4,6 +4,7 @@ import { useState, useEffect, Suspense, useRef, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Search, MapPin, SlidersHorizontal, X, ChevronLeft, ChevronRight, Star } from 'lucide-react'
 import PropertyCard from '@/components/PropertyCard'
+import { ExploreSkeleton, InlineSpinner } from '@/components/LoadingStates'
 
 function ExploreContent() {
   const searchParams = useSearchParams()
@@ -193,11 +194,7 @@ function ExploreContent() {
   }
 
   if (!isClient) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white flex items-center justify-center">
-        <div className="w-16 h-16 border-4 border-primary-200 rounded-full animate-spin border-t-primary-600"></div>
-        </div>
-    )
+    return <ExploreSkeleton />
   }
 
   const categoryOptions = [
@@ -433,19 +430,22 @@ function ExploreContent() {
         )}
 
         {/* Results Grid */}
-            {loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {Array.from({ length: itemsPerPage }).map((_, i) => (
-              <div key={i} className="bg-white rounded-2xl border border-gray-200 overflow-hidden animate-pulse">
-                <div className="h-64 bg-gray-200"></div>
-                <div className="p-6">
-                  <div className="h-4 bg-gray-200 rounded w-3/4 mb-3"></div>
-                  <div className="h-3 bg-gray-200 rounded w-1/2"></div>
-                </div>
-              </div>
-            ))}
-              </div>
-            ) : results.length > 0 ? (
+        {loading && results.length === 0 ? (
+          <ExploreSkeleton />
+        ) : loading && results.length > 0 ? (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {paginatedResults.map((property) => (
+                <PropertyCard
+                  key={`${property.type}-${property.id}`}
+                  property={property}
+                  type={property.type}
+                />
+              ))}
+            </div>
+            <InlineSpinner message="Updating results..." />
+          </>
+        ) : results.length > 0 ? (
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {paginatedResults.map((property) => (
@@ -546,11 +546,7 @@ function ExploreContent() {
 
 export default function Explore() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white flex items-center justify-center">
-        <div className="w-16 h-16 border-4 border-primary-200 rounded-full animate-spin border-t-primary-600"></div>
-      </div>
-    }>
+    <Suspense fallback={<ExploreSkeleton />}>
       <ExploreContent />
     </Suspense>
   )

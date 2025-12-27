@@ -27,9 +27,10 @@ export async function GET(request: NextRequest) {
       rentCompanies: [],
     }
 
-    // Helper to build query
+    // Helper to build query - only select necessary fields for performance
     const buildQuery = (table: string, searchFields: string[]) => {
-      let query: any = supabase.from(table).select('*')
+      // Only fetch fields needed for display
+      let query: any = supabase.from(table).select('id, name, slug, city, province, overall_rating, total_reviews, profile_image, cover_image, created_at')
 
       if (searchQuery.trim()) {
         const searchConditions = searchFields.map(field => `${field}.ilike.%${searchQuery}%`).join(',')
@@ -72,7 +73,7 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      query = query.limit(200) // Increased limit for better pagination
+      query = query.limit(50) // Reduced limit for faster queries
       return query
     }
 
@@ -118,7 +119,7 @@ export async function GET(request: NextRequest) {
 
     await Promise.all(promises)
     return results
-  }, { timeoutMs: 12000, retries: 1 })
+  }, { timeoutMs: 6000, retries: 0 })
 
   if (result.timedOut) {
     return NextResponse.json(
@@ -134,10 +135,17 @@ export async function GET(request: NextRequest) {
     )
   }
 
-  return NextResponse.json({
+  const response = NextResponse.json({
     neighborhoods: result.data?.neighborhoods || [],
     buildings: result.data?.buildings || [],
     landlords: result.data?.landlords || [],
     rentCompanies: result.data?.rentCompanies || [],
   })
+  
+  // Add caching headers for better performance
+  response.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=120')
+  return response
 }
+
+// Enable route segment config for caching
+export const revalidate = 60 // Revalidate every 60 seconds
