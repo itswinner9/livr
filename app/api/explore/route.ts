@@ -78,7 +78,12 @@ export async function GET(request: NextRequest) {
         } else if (location.length === 2 && location.match(/^[A-Z]{2}$/)) {
           query = query.eq('province', location)
         } else {
-          query = query.or(`city.ilike.%${location}%,province.ilike.%${location}%`)
+          // For landlords, also search in country field
+          if (table === 'landlords') {
+            query = query.or(`city.ilike.%${location}%,province.ilike.%${location}%,country.ilike.%${location}%`)
+          } else {
+            query = query.or(`city.ilike.%${location}%,province.ilike.%${location}%`)
+          }
         }
       }
 
