@@ -2,7 +2,6 @@
 
 import { useEffect, useState, Suspense } from 'react'
 import { supabase } from '@/lib/supabase'
-import { withTimeout } from '@/lib/supabaseSafe'
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic'
@@ -12,11 +11,11 @@ function AuthCallbackContent() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    let isProcessing = false
+    let mounted = true
     let redirectTimeout: NodeJS.Timeout | null = null
+    let isProcessing = false
 
     const processAuth = async () => {
-      // Prevent multiple executions
       if (isProcessing) {
         console.log('⚠️ Already processing, skipping...')
         return
@@ -35,29 +34,27 @@ function AuthCallbackContent() {
           hasHash: !!hash, 
           hasCode: !!code, 
           error: errorParam,
-          hashLength: hash?.length,
-          url: window.location.href.substring(0, 100)
+          url: window.location.href.substring(0, 150)
         })
 
         // Handle OAuth errors first
         if (errorParam) {
           console.error('❌ OAuth error:', errorParam, errorDescription)
-          setError(errorDescription || errorParam || 'Authentication failed')
-          setStatus('Authentication failed')
+          if (mounted) {
+            setError(errorDescription || errorParam || 'Authentication failed')
+            setStatus('Authentication failed')
+          }
           redirectTimeout = setTimeout(() => {
             window.location.href = '/login?error=auth_failed'
           }, 2000)
           return
         }
 
-        // Handle hash-based OAuth (implicit flow) - Google sometimes uses this
+        // Handle hash-based OAuth (implicit flow)
         if (hash && hash.includes('access_token')) {
-          setStatus('Setting up your session...')
+          if (mounted) setStatus('Setting up your session...')
           
-          // Save hash before clearing
           const hashBefore = hash
-          
-          // Clear hash from URL immediately to prevent re-processing
           window.history.replaceState(null, '', window.location.pathname + window.location.search)
           
           const hashParams = new URLSearchParams(hashBefore.substring(1))
@@ -72,17 +69,21 @@ function AuthCallbackContent() {
           if (accessToken && refreshToken) {
             try {
               console.log('🔐 Setting session from hash...')
-              setStatus('Setting up your session...')
               
-              const sessionResult = await withTimeout(
-                () => supabase.auth.setSession({
-                  access_token: accessToken,
-                  refresh_token: refreshToken,
-                }),
-                8000
+              // Set timeout for this operation
+              const sessionPromise = supabase.auth.setSession({
+                access_token: accessToken,
+                refresh_token: refreshToken,
+              })
+              
+              const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Session setup timed out')), 8000)
               )
               
-              const { data, error: sessionError } = sessionResult
+              const { data, error: sessionError } = await Promise.race([
+                sessionPromise,
+                timeoutPromise
+              ]) as any
               
               if (sessionError) {
                 console.error('❌ Session error:', sessionError)
@@ -91,9 +92,9 @@ function AuthCallbackContent() {
               
               if (data?.session) {
                 console.log('✅ Session created from hash! User:', data.session.user.email)
-                setStatus('Login successful! Redirecting...')
+                if (mounted) setStatus('Login successful! Redirecting...')
                 
-                // Redirect immediately - session is already set
+                // Redirect immediately
                 window.location.replace('/')
                 return
               } else {
@@ -101,8 +102,10 @@ function AuthCallbackContent() {
               }
             } catch (err: any) {
               console.error('❌ Error setting session from hash:', err)
-              setError(err.message || 'Failed to set session')
-              setStatus('Authentication failed')
+              if (mounted) {
+                setError(err.message || 'Failed to set session')
+                setStatus('Authentication failed')
+              }
               redirectTimeout = setTimeout(() => {
                 window.location.href = '/login?error=auth_failed'
               }, 2000)
@@ -110,8 +113,10 @@ function AuthCallbackContent() {
             }
           } else {
             console.error('❌ Missing tokens in hash')
-            setError('Missing authentication tokens in URL')
-            setStatus('Authentication failed')
+            if (mounted) {
+              setError('Missing authentication tokens in URL')
+              setStatus('Authentication failed')
+            }
             redirectTimeout = setTimeout(() => {
               window.location.href = '/login?error=auth_failed'
             }, 2000)
@@ -121,17 +126,22 @@ function AuthCallbackContent() {
         
         // Handle code-based OAuth (PKCE flow) - Preferred method
         if (code) {
-          setStatus('Exchanging authorization code...')
+          if (mounted) setStatus('Exchanging authorization code...')
           
           try {
             console.log('🔐 Exchanging code for session...')
             
-            const exchangeResult = await withTimeout(
-              () => supabase.auth.exchangeCodeForSession(code),
-              8000
+            // Set timeout for this operation
+            const exchangePromise = supabase.auth.exchangeCodeForSession(code)
+            
+            const timeoutPromise = new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Code exchange timed out')), 8000)
             )
             
-            const { data, error: codeError } = exchangeResult
+            const { data, error: codeError } = await Promise.race([
+              exchangePromise,
+              timeoutPromise
+            ]) as any
             
             if (codeError) {
               console.error('❌ Code exchange error:', codeError)
@@ -140,9 +150,9 @@ function AuthCallbackContent() {
             
             if (data?.session) {
               console.log('✅ Code exchanged successfully! User:', data.session.user.email)
-              setStatus('Login successful! Redirecting...')
+              if (mounted) setStatus('Login successful! Redirecting...')
               
-              // Redirect immediately - session is already set
+              // Redirect immediately
               window.location.replace('/')
               return
             } else {
@@ -153,8 +163,10 @@ function AuthCallbackContent() {
             const errorMsg = err.message?.includes('timed out') 
               ? 'Request timed out. Please try again.'
               : (err.message || 'Failed to exchange authorization code')
-            setError(errorMsg)
-            setStatus('Authentication failed')
+            if (mounted) {
+              setError(errorMsg)
+              setStatus('Authentication failed')
+            }
             redirectTimeout = setTimeout(() => {
               window.location.href = '/login?error=auth_failed'
             }, 2000)
@@ -164,15 +176,18 @@ function AuthCallbackContent() {
         
         // No hash or code - check if already authenticated
         console.log('⚠️ No hash or code found, checking existing session...')
-        setStatus('Checking existing session...')
+        if (mounted) setStatus('Checking existing session...')
         
         try {
-          const sessionResult = await withTimeout(
-            () => supabase.auth.getSession(),
-            5000
+          const sessionPromise = supabase.auth.getSession()
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Session check timed out')), 5000)
           )
           
-          const { data: { session }, error: sessionError } = sessionResult
+          const { data: { session }, error: sessionError } = await Promise.race([
+            sessionPromise,
+            timeoutPromise
+          ]) as any
           
           if (sessionError) {
             console.error('❌ Error checking session:', sessionError)
@@ -181,7 +196,7 @@ function AuthCallbackContent() {
           
           if (session) {
             console.log('✅ Already authenticated, redirecting...')
-            setStatus('Redirecting...')
+            if (mounted) setStatus('Redirecting...')
             window.location.replace('/')
             return
           }
@@ -191,16 +206,20 @@ function AuthCallbackContent() {
         
         // No session found - redirect to login
         console.log('❌ No authentication found - redirecting to login')
-        setError('No authentication information found')
-        setStatus('Redirecting to login...')
+        if (mounted) {
+          setError('No authentication information found')
+          setStatus('Redirecting to login...')
+        }
         redirectTimeout = setTimeout(() => {
           window.location.href = '/login?error=no_auth'
         }, 2000)
         
       } catch (err: any) {
         console.error('❌ Unexpected error in callback:', err)
-        setError(err.message || 'An unexpected error occurred')
-        setStatus('Authentication failed')
+        if (mounted) {
+          setError(err.message || 'An unexpected error occurred')
+          setStatus('Authentication failed')
+        }
         redirectTimeout = setTimeout(() => {
           window.location.href = '/login?error=auth_failed'
         }, 2000)
@@ -212,20 +231,24 @@ function AuthCallbackContent() {
     // Start processing immediately
     const timer = setTimeout(() => {
       processAuth()
-    }, 50)
+    }, 100)
 
-    // Safety timeout - redirect after 6 seconds if still processing (reduced from 10s)
+    // Safety timeout - redirect after 10 seconds if still processing
     const safetyTimeout = setTimeout(() => {
-      console.warn('⚠️ Safety timeout (6s) - redirecting to home')
-      setError('Authentication timed out. Please try again.')
-      setStatus('Redirecting...')
+      console.warn('⚠️ Safety timeout (10s) - redirecting to login')
+      if (mounted && !error) {
+        setError('Authentication timed out. Please try logging in again.')
+        setStatus('Redirecting to login...')
+      }
       window.location.href = '/login?error=timeout'
-    }, 6000)
+    }, 10000)
 
     return () => {
+      mounted = false
       clearTimeout(timer)
       clearTimeout(safetyTimeout)
       if (redirectTimeout) clearTimeout(redirectTimeout)
+      isProcessing = false
     }
   }, [])
 
