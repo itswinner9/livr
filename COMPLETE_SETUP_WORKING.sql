@@ -210,6 +210,15 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'landlords' AND column_name = 'company_name') THEN
     ALTER TABLE landlords ADD COLUMN company_name TEXT;
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'landlords' AND column_name = 'email') THEN
+    ALTER TABLE landlords ADD COLUMN email TEXT;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'landlords' AND column_name = 'phone') THEN
+    ALTER TABLE landlords ADD COLUMN phone TEXT;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'landlords' AND column_name = 'website') THEN
+    ALTER TABLE landlords ADD COLUMN website TEXT;
+  END IF;
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'landlords' AND column_name = 'city') THEN
     ALTER TABLE landlords ADD COLUMN city TEXT;
   END IF;
@@ -219,14 +228,38 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'landlords' AND column_name = 'country') THEN
     ALTER TABLE landlords ADD COLUMN country TEXT DEFAULT 'Canada';
   END IF;
-  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'landlords' AND column_name = 'overall_rating') THEN
-    ALTER TABLE landlords ADD COLUMN overall_rating NUMERIC(3, 2) DEFAULT 0;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'landlords' AND column_name = 'description') THEN
+    ALTER TABLE landlords ADD COLUMN description TEXT;
   END IF;
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'landlords' AND column_name = 'profile_image') THEN
     ALTER TABLE landlords ADD COLUMN profile_image TEXT;
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'landlords' AND column_name = 'overall_rating') THEN
+    ALTER TABLE landlords ADD COLUMN overall_rating NUMERIC(3, 2) DEFAULT 0;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'landlords' AND column_name = 'responsiveness_rating') THEN
+    ALTER TABLE landlords ADD COLUMN responsiveness_rating NUMERIC(3, 2) DEFAULT 0;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'landlords' AND column_name = 'maintenance_rating') THEN
+    ALTER TABLE landlords ADD COLUMN maintenance_rating NUMERIC(3, 2) DEFAULT 0;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'landlords' AND column_name = 'communication_rating') THEN
+    ALTER TABLE landlords ADD COLUMN communication_rating NUMERIC(3, 2) DEFAULT 0;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'landlords' AND column_name = 'fairness_rating') THEN
+    ALTER TABLE landlords ADD COLUMN fairness_rating NUMERIC(3, 2) DEFAULT 0;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'landlords' AND column_name = 'professionalism_rating') THEN
+    ALTER TABLE landlords ADD COLUMN professionalism_rating NUMERIC(3, 2) DEFAULT 0;
+  END IF;
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'landlords' AND column_name = 'total_reviews') THEN
     ALTER TABLE landlords ADD COLUMN total_reviews INTEGER DEFAULT 0;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'landlords' AND column_name = 'created_at') THEN
+    ALTER TABLE landlords ADD COLUMN created_at TIMESTAMPTZ DEFAULT NOW();
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'landlords' AND column_name = 'updated_at') THEN
+    ALTER TABLE landlords ADD COLUMN updated_at TIMESTAMPTZ DEFAULT NOW();
   END IF;
 END $$;
 

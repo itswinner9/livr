@@ -30,7 +30,32 @@ CREATE TABLE IF NOT EXISTS landlords (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Step 2: Drop existing foreign key constraint if it exists (to recreate it)
+-- Step 2: Clean up orphaned reviews (reviews pointing to non-existent landlords)
+-- This prevents foreign key constraint violations
+DO $$
+DECLARE
+  orphaned_count INTEGER;
+BEGIN
+  -- Count orphaned reviews
+  SELECT COUNT(*) INTO orphaned_count
+  FROM landlord_reviews lr
+  WHERE NOT EXISTS (
+    SELECT 1 FROM landlords l WHERE l.id = lr.landlord_id
+  );
+  
+  -- Delete orphaned reviews if any exist
+  IF orphaned_count > 0 THEN
+    DELETE FROM landlord_reviews
+    WHERE NOT EXISTS (
+      SELECT 1 FROM landlords l WHERE l.id = landlord_reviews.landlord_id
+    );
+    RAISE NOTICE 'Deleted % orphaned landlord review(s)', orphaned_count;
+  ELSE
+    RAISE NOTICE 'No orphaned reviews found';
+  END IF;
+END $$;
+
+-- Step 3: Drop existing foreign key constraint if it exists (to recreate it)
 DO $$
 BEGIN
   IF EXISTS (
@@ -38,10 +63,11 @@ BEGIN
     WHERE conname = 'landlord_reviews_landlord_id_fkey'
   ) THEN
     ALTER TABLE landlord_reviews DROP CONSTRAINT landlord_reviews_landlord_id_fkey;
+    RAISE NOTICE 'Dropped existing landlord_reviews_landlord_id_fkey constraint';
   END IF;
 END $$;
 
--- Step 3: Ensure landlord_reviews table exists WITHOUT the foreign key first
+-- Step 4: Ensure landlord_reviews table exists WITHOUT the foreign key first
 CREATE TABLE IF NOT EXISTS landlord_reviews (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   landlord_id UUID NOT NULL,
