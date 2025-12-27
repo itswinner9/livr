@@ -89,13 +89,28 @@ export async function GET(request: NextRequest) {
     // Define columns for each category (each table has different image column names)
     const neighborhoodColumns = 'id, name, slug, city, province, overall_rating, total_reviews, cover_image, created_at'
     const buildingColumns = 'id, name, slug, address, city, province, overall_rating, total_reviews, cover_image, created_at'
-    const landlordColumns = 'id, name, slug, city, province, overall_rating, total_reviews, profile_image, created_at'
+    const landlordColumns = 'id, name, slug, city, province, country, overall_rating, total_reviews, profile_image, created_at'
     const companyColumns = 'id, name, slug, city, province, overall_rating, total_reviews, created_at'
 
     // Fetch neighborhoods
     if (category === 'all' || category === 'neighborhoods') {
       promises.push(
-        buildQuery('neighborhoods', ['name', 'city', 'province'], neighborhoodColumns).then(({ data, error }: any) => {
+        (async () => {
+          const query = buildQuery('neighborhoods', ['name', 'city', 'province'], neighborhoodColumns)
+          const { data, error } = await query
+          if (error) {
+            console.error('❌ Error fetching neighborhoods:', error.message || error)
+            throw error
+          }
+          console.log(`✅ Neighborhoods fetched: ${data?.length || 0} items`)
+          if (data) results.neighborhoods = data
+          return data
+        })().catch((err: any) => {
+          console.error('❌ Neighborhoods query exception:', err.message || err)
+          results.neighborhoods = []
+          return []
+        })
+      )
           if (error) {
             console.error('❌ Error fetching neighborhoods:', error.message || error)
             throw error // Re-throw to be caught by safeSupabaseRequest
@@ -133,7 +148,7 @@ export async function GET(request: NextRequest) {
     // Fetch landlords
     if (category === 'all' || category === 'landlords') {
       promises.push(
-        buildQuery('landlords', ['name', 'city'], landlordColumns).then(({ data, error }: any) => {
+        buildQuery('landlords', ['name', 'city', 'province'], landlordColumns).then(({ data, error }: any) => {
           if (error) {
             console.error('❌ Error fetching landlords:', error.message || error)
             throw error
