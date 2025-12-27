@@ -81,7 +81,7 @@ export async function GET(request: NextRequest) {
     const neighborhoodColumns = 'id, name, slug, city, province, overall_rating, total_reviews, cover_image, created_at'
     const buildingColumns = 'id, name, slug, address, city, province, overall_rating, total_reviews, cover_image, created_at'
     const landlordColumns = 'id, name, slug, city, province, overall_rating, total_reviews, profile_image, created_at'
-    const companyColumns = 'id, name, slug, city, province, overall_rating, total_reviews, profile_image, created_at'
+    const companyColumns = 'id, name, slug, city, province, overall_rating, total_reviews, created_at'
 
     // Fetch neighborhoods
     if (category === 'all' || category === 'neighborhoods') {
