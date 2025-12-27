@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
+import { ProfileSkeleton } from '@/components/LoadingStates'
 
 export default function ProfilePage() {
   const router = useRouter()
@@ -202,81 +203,6 @@ export default function ProfilePage() {
 
   if (loading) {
     return <ProfileSkeleton />
-  }
-
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            {/* Sidebar Skeleton */}
-            <div className="lg:col-span-1 space-y-4">
-              <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200 animate-pulse">
-                <div className="flex flex-col items-center text-center mb-4">
-                  <div className="w-20 h-20 bg-gray-200 rounded-full mb-3"></div>
-                  <div className="h-6 bg-gray-200 rounded-lg w-32 mb-2"></div>
-                  <div className="h-4 bg-gray-200 rounded-lg w-48"></div>
-                </div>
-                <div className="border-t border-gray-200 pt-4 mt-4 space-y-3">
-                  {[1, 2, 3, 4].map((i) => (
-                    <div key={i} className="flex items-center justify-between">
-                      <div className="h-4 bg-gray-200 rounded w-24"></div>
-                      <div className="h-4 bg-gray-200 rounded w-8"></div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="bg-white rounded-xl shadow-lg p-5 border border-gray-200 animate-pulse">
-                <div className="h-5 bg-gray-200 rounded-lg w-32 mb-4"></div>
-                <div className="space-y-3">
-                  {[1, 2, 3, 4].map((i) => (
-                    <div key={i} className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-gray-200 rounded-lg"></div>
-                      <div className="flex-1">
-                        <div className="h-4 bg-gray-200 rounded w-24 mb-2"></div>
-                        <div className="h-3 bg-gray-200 rounded w-32"></div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Main Content Skeleton */}
-            <div className="lg:col-span-3">
-              <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-200 animate-pulse">
-                <div className="flex items-center justify-between mb-6">
-                  <div>
-                    <div className="h-7 bg-gray-200 rounded-lg w-40 mb-2"></div>
-                    <div className="h-4 bg-gray-200 rounded w-32"></div>
-                  </div>
-                  <div className="h-11 bg-gray-200 rounded-lg w-40"></div>
-                </div>
-                <div className="space-y-4">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="bg-gray-50 rounded-xl p-6 border border-gray-200">
-                      <div className="flex items-start justify-between mb-4">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <div className="w-8 h-8 bg-gray-200 rounded-lg"></div>
-                            <div className="h-6 bg-gray-200 rounded-lg w-48"></div>
-                          </div>
-                          <div className="h-4 bg-gray-200 rounded w-32"></div>
-                        </div>
-                        <div className="h-10 bg-gray-200 rounded-lg w-20"></div>
-                      </div>
-                      <div className="h-4 bg-gray-200 rounded w-full mb-2"></div>
-                      <div className="h-4 bg-gray-200 rounded w-3/4 mb-4"></div>
-                      <div className="flex gap-3">
-                        <div className="h-10 bg-gray-200 rounded-lg flex-1"></div>
-                        <div className="h-10 bg-gray-200 rounded-lg flex-1"></div>
-                        <div className="h-10 bg-gray-200 rounded-lg flex-1"></div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    )
   }
 
   const stats = {
