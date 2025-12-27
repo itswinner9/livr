@@ -77,25 +77,8 @@ export default function Login() {
 
       console.log('✅ Login successful! User:', data.session.user.email)
       
-      // Wait briefly for session to be stored
-      await new Promise(resolve => setTimeout(resolve, 500))
-      
-      // Verify session exists with timeout
-      const sessionResult = await withTimeout(
-        () => supabase.auth.getSession(),
-        8000
-      )
-      
-      const { data: sessionData, error: verifyError } = sessionResult
-      
-      if (verifyError || !sessionData?.session) {
-        console.error('❌ Session verification failed:', verifyError)
-        setError('Session not established - please try again')
-        setLoading(false)
-        return
-      }
-
-      console.log('✅ Session verified! Redirecting...')
+      // Session is already set from signInWithPassword, redirect immediately
+      console.log('✅ Redirecting...')
       
       // Force a full page reload to ensure session is properly loaded
       window.location.href = '/'

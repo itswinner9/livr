@@ -2,6 +2,7 @@
 
 import { useEffect, useState, Suspense } from 'react'
 import { supabase } from '@/lib/supabase'
+import { withTimeout } from '@/lib/supabaseSafe'
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic'
@@ -71,10 +72,17 @@ function AuthCallbackContent() {
           if (accessToken && refreshToken) {
             try {
               console.log('🔐 Setting session from hash...')
-              const { data, error: sessionError } = await supabase.auth.setSession({
-                access_token: accessToken,
-                refresh_token: refreshToken,
-              })
+              setStatus('Setting up your session...')
+              
+              const sessionResult = await withTimeout(
+                () => supabase.auth.setSession({
+                  access_token: accessToken,
+                  refresh_token: refreshToken,
+                }),
+                8000
+              )
+              
+              const { data, error: sessionError } = sessionResult
               
               if (sessionError) {
                 console.error('❌ Session error:', sessionError)
@@ -85,18 +93,9 @@ function AuthCallbackContent() {
                 console.log('✅ Session created from hash! User:', data.session.user.email)
                 setStatus('Login successful! Redirecting...')
                 
-                // Verify session is stored
-                await new Promise(resolve => setTimeout(resolve, 300))
-                
-                const { data: { session: verifySession } } = await supabase.auth.getSession()
-                if (verifySession) {
-                  console.log('✅ Session verified!')
-                  // Redirect to home
-                  window.location.replace('/')
-                  return
-                } else {
-                  throw new Error('Session not persisted')
-                }
+                // Redirect immediately - session is already set
+                window.location.replace('/')
+                return
               } else {
                 throw new Error('No session returned from hash')
               }
@@ -126,7 +125,13 @@ function AuthCallbackContent() {
           
           try {
             console.log('🔐 Exchanging code for session...')
-            const { data, error: codeError } = await supabase.auth.exchangeCodeForSession(code)
+            
+            const exchangeResult = await withTimeout(
+              () => supabase.auth.exchangeCodeForSession(code),
+              8000
+            )
+            
+            const { data, error: codeError } = exchangeResult
             
             if (codeError) {
               console.error('❌ Code exchange error:', codeError)
@@ -137,24 +142,18 @@ function AuthCallbackContent() {
               console.log('✅ Code exchanged successfully! User:', data.session.user.email)
               setStatus('Login successful! Redirecting...')
               
-              // Verify session is stored
-              await new Promise(resolve => setTimeout(resolve, 300))
-              
-              const { data: { session: verifySession } } = await supabase.auth.getSession()
-              if (verifySession) {
-                console.log('✅ Session verified!')
-                // Redirect to home
-                window.location.replace('/')
-                return
-              } else {
-                throw new Error('Session not persisted')
-              }
+              // Redirect immediately - session is already set
+              window.location.replace('/')
+              return
             } else {
               throw new Error('No session returned from code exchange')
             }
           } catch (err: any) {
             console.error('❌ Error exchanging code:', err)
-            setError(err.message || 'Failed to exchange authorization code')
+            const errorMsg = err.message?.includes('timed out') 
+              ? 'Request timed out. Please try again.'
+              : (err.message || 'Failed to exchange authorization code')
+            setError(errorMsg)
             setStatus('Authentication failed')
             redirectTimeout = setTimeout(() => {
               window.location.href = '/login?error=auth_failed'
@@ -168,7 +167,12 @@ function AuthCallbackContent() {
         setStatus('Checking existing session...')
         
         try {
-          const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+          const sessionResult = await withTimeout(
+            () => supabase.auth.getSession(),
+            5000
+          )
+          
+          const { data: { session }, error: sessionError } = sessionResult
           
           if (sessionError) {
             console.error('❌ Error checking session:', sessionError)
@@ -200,19 +204,23 @@ function AuthCallbackContent() {
         redirectTimeout = setTimeout(() => {
           window.location.href = '/login?error=auth_failed'
         }, 2000)
+      } finally {
+        isProcessing = false
       }
     }
 
     // Start processing immediately
     const timer = setTimeout(() => {
       processAuth()
-    }, 100)
+    }, 50)
 
-    // Safety timeout - redirect after 10 seconds if still processing
+    // Safety timeout - redirect after 6 seconds if still processing (reduced from 10s)
     const safetyTimeout = setTimeout(() => {
-      console.warn('⚠️ Safety timeout (10s) - redirecting to home')
-      window.location.href = '/'
-    }, 10000)
+      console.warn('⚠️ Safety timeout (6s) - redirecting to home')
+      setError('Authentication timed out. Please try again.')
+      setStatus('Redirecting...')
+      window.location.href = '/login?error=timeout'
+    }, 6000)
 
     return () => {
       clearTimeout(timer)
