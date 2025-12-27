@@ -28,9 +28,9 @@ export async function GET(request: NextRequest) {
     }
 
     // Helper to build query - only select necessary fields for performance
-    const buildQuery = (table: string, searchFields: string[]) => {
-      // Only fetch fields needed for display
-      let query: any = supabase.from(table).select('id, name, slug, city, province, overall_rating, total_reviews, profile_image, cover_image, created_at')
+    const buildQuery = (table: string, searchFields: string[], selectColumns: string) => {
+      // Only fetch fields needed for display - columns vary by table
+      let query: any = supabase.from(table).select(selectColumns)
 
       if (searchQuery.trim()) {
         const searchConditions = searchFields.map(field => `${field}.ilike.%${searchQuery}%`).join(',')
@@ -77,12 +77,24 @@ export async function GET(request: NextRequest) {
       return query
     }
 
+    // Define columns for each category (each table has different image column names)
+    const neighborhoodColumns = 'id, name, slug, city, province, overall_rating, total_reviews, cover_image, created_at'
+    const buildingColumns = 'id, name, slug, address, city, province, overall_rating, total_reviews, cover_image, created_at'
+    const landlordColumns = 'id, name, slug, city, province, overall_rating, total_reviews, profile_image, created_at'
+    const companyColumns = 'id, name, slug, city, province, overall_rating, total_reviews, profile_image, created_at'
+
     // Fetch neighborhoods
     if (category === 'all' || category === 'neighborhoods') {
       promises.push(
-        buildQuery('neighborhoods', ['name', 'city', 'province']).then(({ data, error }: any) => {
+        buildQuery('neighborhoods', ['name', 'city', 'province'], neighborhoodColumns).then(({ data, error }: any) => {
+          if (error) {
+            console.error('Error fetching neighborhoods:', error)
+          }
           if (!error && data) results.neighborhoods = data
           return data
+        }).catch((err: any) => {
+          console.error('Neighborhoods query failed:', err)
+          return []
         })
       )
     }
@@ -90,9 +102,15 @@ export async function GET(request: NextRequest) {
     // Fetch buildings
     if (category === 'all' || category === 'buildings') {
       promises.push(
-        buildQuery('buildings', ['name', 'city', 'province']).then(({ data, error }: any) => {
+        buildQuery('buildings', ['name', 'city', 'province'], buildingColumns).then(({ data, error }: any) => {
+          if (error) {
+            console.error('Error fetching buildings:', error)
+          }
           if (!error && data) results.buildings = data
           return data
+        }).catch((err: any) => {
+          console.error('Buildings query failed:', err)
+          return []
         })
       )
     }
@@ -100,9 +118,15 @@ export async function GET(request: NextRequest) {
     // Fetch landlords
     if (category === 'all' || category === 'landlords') {
       promises.push(
-        buildQuery('landlords', ['name', 'city']).then(({ data, error }: any) => {
+        buildQuery('landlords', ['name', 'city'], landlordColumns).then(({ data, error }: any) => {
+          if (error) {
+            console.error('Error fetching landlords:', error)
+          }
           if (!error && data) results.landlords = data
           return data
+        }).catch((err: any) => {
+          console.error('Landlords query failed:', err)
+          return []
         })
       )
     }
@@ -110,9 +134,15 @@ export async function GET(request: NextRequest) {
     // Fetch companies
     if (category === 'all' || category === 'companies') {
       promises.push(
-        buildQuery('rent_companies', ['name', 'city']).then(({ data, error }: any) => {
+        buildQuery('rent_companies', ['name', 'city'], companyColumns).then(({ data, error }: any) => {
+          if (error) {
+            console.error('Error fetching companies:', error)
+          }
           if (!error && data) results.rentCompanies = data
           return data
+        }).catch((err: any) => {
+          console.error('Companies query failed:', err)
+          return []
         })
       )
     }
