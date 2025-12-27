@@ -314,6 +314,7 @@ CREATE TABLE IF NOT EXISTS neighborhood_reviews (
   transit NUMERIC(3, 2) CHECK (transit BETWEEN 1 AND 5),
   amenities NUMERIC(3, 2) CHECK (amenities BETWEEN 1 AND 5),
   community NUMERIC(3, 2) CHECK (community BETWEEN 1 AND 5),
+  cleanliness NUMERIC(3, 2) CHECK (cleanliness BETWEEN 1 AND 5),
   images TEXT[],
   years_lived INTEGER,
   would_recommend BOOLEAN,
