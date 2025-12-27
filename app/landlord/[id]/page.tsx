@@ -611,7 +611,7 @@ export default function LandlordPage() {
                     })
                     .map((review) => {
                       const displayName = review.is_anonymous ? 'Anonymous User' : (review.display_name || 'Anonymous User')
-                      const reviewText = review.comment || review.review || 'No review text provided'
+                      const reviewText = review.comment || review.review || null
                       
                       return (
                         <div key={review.id} className="bg-white rounded-lg p-4 border border-gray-200 hover:border-gray-300 hover:shadow-sm transition-all">
@@ -639,8 +639,28 @@ export default function LandlordPage() {
                           </div>
 
                           {/* Review Text - Full text, no clamp */}
-                          {reviewText && reviewText !== 'No review text provided' && (
-                            <p className="text-gray-700 mb-2.5 text-sm leading-relaxed whitespace-pre-wrap">{reviewText}</p>
+                          {reviewText && (
+                            <div className="mb-3">
+                              <p className="text-gray-700 text-sm leading-relaxed whitespace-pre-wrap">{reviewText}</p>
+                            </div>
+                          )}
+
+                          {/* Pros and Cons */}
+                          {(review.pros || review.cons) && (
+                            <div className="mb-3 space-y-2">
+                              {review.pros && (
+                                <div className="bg-green-50 border border-green-200 rounded-lg p-2.5">
+                                  <p className="text-xs font-semibold text-green-900 mb-1">✓ Pros</p>
+                                  <p className="text-xs text-green-800 leading-relaxed whitespace-pre-wrap">{review.pros}</p>
+                                </div>
+                              )}
+                              {review.cons && (
+                                <div className="bg-red-50 border border-red-200 rounded-lg p-2.5">
+                                  <p className="text-xs font-semibold text-red-900 mb-1">✗ Cons</p>
+                                  <p className="text-xs text-red-800 leading-relaxed whitespace-pre-wrap">{review.cons}</p>
+                                </div>
+                              )}
+                            </div>
                           )}
 
                           {/* Review Images - Fixed Height */}
@@ -843,4 +863,6 @@ export default function LandlordPage() {
       )}
     </div>
   )
+}
+
 }
