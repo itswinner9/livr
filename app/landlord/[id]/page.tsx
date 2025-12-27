@@ -638,8 +638,10 @@ export default function LandlordPage() {
                             </div>
                           </div>
 
-                          {/* Review Text */}
-                          <p className="text-gray-700 mb-2.5 text-xs leading-relaxed line-clamp-3">{reviewText}</p>
+                          {/* Review Text - Full text, no clamp */}
+                          {reviewText && reviewText !== 'No review text provided' && (
+                            <p className="text-gray-700 mb-2.5 text-sm leading-relaxed whitespace-pre-wrap">{reviewText}</p>
+                          )}
 
                           {/* Review Images - Fixed Height */}
                           {review.images && (

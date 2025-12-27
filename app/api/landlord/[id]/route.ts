@@ -83,7 +83,7 @@ export async function GET(
         .eq('landlord_id', landlord.id)
         .eq('status', 'approved')
         .order('created_at', { ascending: false })
-        .limit(50)
+        .limit(100)
       
       if (error) throw error
       return data || []
