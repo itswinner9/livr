@@ -47,46 +47,69 @@ function RateNeighborhoodForm() {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const { data: { session }, error } = await supabase.auth.getSession()
+        // Check session with timeout
+        const sessionPromise = supabase.auth.getSession()
+        const sessionTimeout = new Promise<never>((_, reject) => 
+          setTimeout(() => reject(new Error('Session check timed out')), 5000)
+        )
+        
+        const { data: { session }, error } = await Promise.race([sessionPromise, sessionTimeout]) as any
         
         if (error || !session) {
           router.push('/login?redirect=/rate/neighborhood')
+          setUserLoading(false)
           return
         }
         
         setUser(session.user)
         
-        const { data: profile } = await supabase
-          .from('user_profiles')
-          .select('display_name, status, banned_until, cooled_until, moderation_reason')
-          .eq('id', session.user.id)
-          .single()
-        
-        if (profile?.display_name) {
-          setDisplayName(profile.display_name)
-        }
-
-        // Check user status
-        if (profile?.status === 'banned') {
-          const isStillBanned = !profile.banned_until || new Date(profile.banned_until) > new Date()
-          if (isStillBanned) {
-            alert(`🚫 Account Banned\n\nReason: ${profile.moderation_reason || 'No reason provided'}\n\nYou cannot submit reviews while banned. Please contact support if you believe this is an error.`)
-            router.push('/profile')
-            return
+        // Check user profile with timeout
+        try {
+          const profilePromise = supabase
+            .from('user_profiles')
+            .select('display_name, status, banned_until, cooled_until, moderation_reason')
+            .eq('id', session.user.id)
+            .single()
+          
+          const profileTimeout = new Promise<never>((_, reject) => 
+            setTimeout(() => reject(new Error('Profile check timed out')), 5000)
+          )
+          
+          const { data: profile } = await Promise.race([profilePromise, profileTimeout]) as any
+          
+          if (profile?.display_name) {
+            setDisplayName(profile.display_name)
           }
-        }
 
-        if (profile?.status === 'cooled') {
-          const isStillCooled = !profile.cooled_until || new Date(profile.cooled_until) > new Date()
-          if (isStillCooled) {
-            alert(`❄️ Cooling Off Period\n\nReason: ${profile.moderation_reason || 'No reason provided'}\n\nYou cannot submit reviews during your cooling off period.`)
-            router.push('/profile')
-            return
+          // Check user status
+          if (profile?.status === 'banned') {
+            const isStillBanned = !profile.banned_until || new Date(profile.banned_until) > new Date()
+            if (isStillBanned) {
+              alert(`🚫 Account Banned\n\nReason: ${profile.moderation_reason || 'No reason provided'}\n\nYou cannot submit reviews while banned. Please contact support if you believe this is an error.`)
+              router.push('/profile')
+              setUserLoading(false)
+              return
+            }
           }
+
+          if (profile?.status === 'cooled') {
+            const isStillCooled = !profile.cooled_until || new Date(profile.cooled_until) > new Date()
+            if (isStillCooled) {
+              alert(`❄️ Cooling Off Period\n\nReason: ${profile.moderation_reason || 'No reason provided'}\n\nYou cannot submit reviews during your cooling off period.`)
+              router.push('/profile')
+              setUserLoading(false)
+              return
+            }
+          }
+        } catch (profileError: any) {
+          console.error('Error checking profile:', profileError)
+          // Continue even if profile check fails - don't block the form
         }
         
         setUserLoading(false)
-      } catch (error) {
+      } catch (error: any) {
+        console.error('Error in checkAuth:', error)
+        setUserLoading(false)
         router.push('/login?redirect=/rate/neighborhood')
       }
     }

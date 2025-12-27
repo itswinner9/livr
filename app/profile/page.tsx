@@ -28,18 +28,26 @@ export default function ProfilePage() {
   const checkUser = async () => {
     try {
       setLoading(true)
-      const { data: { session } } = await supabase.auth.getSession()
+      
+      // Check session with timeout
+      const sessionPromise = supabase.auth.getSession()
+      const sessionTimeout = new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error('Session check timed out')), 5000)
+      )
+      
+      const { data: { session } } = await Promise.race([sessionPromise, sessionTimeout]) as any
       
       if (!session) {
         router.push('/login')
+        setLoading(false)
         return
       }
 
       setUser(session.user)
 
-      // Fetch profile and reviews in parallel using API routes
+      // Fetch profile and reviews in parallel using API routes with timeout
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 15000)
+      const timeoutId = setTimeout(() => controller.abort(), 8000) // Reduced to 8s
 
       try {
         // Get access token from session
@@ -65,11 +73,13 @@ export default function ProfilePage() {
         clearTimeout(timeoutId)
 
         if (!profileResponse.ok) {
-          throw new Error('Failed to load profile')
+          const errorData = await profileResponse.json().catch(() => ({}))
+          throw new Error(errorData.error || 'Failed to load profile')
         }
 
         if (!reviewsResponse.ok) {
-          throw new Error('Failed to load reviews')
+          const errorData = await reviewsResponse.json().catch(() => ({}))
+          throw new Error(errorData.error || 'Failed to load reviews')
         }
 
         const profileData = await profileResponse.json()
@@ -79,16 +89,22 @@ export default function ProfilePage() {
         setFullName(profileData.profile?.full_name || '')
         setReviews(reviewsData.reviews || [])
       } catch (fetchError: any) {
+        clearTimeout(timeoutId)
         if (fetchError.name === 'AbortError') {
           console.error('Request timed out')
           alert('Request timed out. Please try again.')
         } else {
-          throw fetchError
+          console.error('Fetch error:', fetchError)
+          alert('Error loading data: ' + (fetchError.message || 'Please refresh the page.'))
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading profile:', error)
-      alert('Error loading profile. Please refresh the page.')
+      if (error.message?.includes('timed out')) {
+        alert('Session check timed out. Please refresh the page.')
+      } else {
+        alert('Error loading profile. Please refresh the page.')
+      }
     } finally {
       setLoading(false)
     }
@@ -573,3 +589,4 @@ export default function ProfilePage() {
     </div>
   )
 }
+
