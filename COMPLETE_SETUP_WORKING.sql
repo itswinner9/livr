@@ -356,8 +356,8 @@ END $$;
 
 CREATE TABLE IF NOT EXISTS landlord_reviews (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  landlord_id UUID NOT NULL REFERENCES landlords(id) ON DELETE CASCADE,
-  user_id UUID NOT NULL REFERENCES user_profiles(id) ON DELETE CASCADE,
+  landlord_id UUID NOT NULL,
+  user_id UUID NOT NULL,
   review TEXT,
   comment TEXT,
   pros TEXT,
@@ -385,6 +385,34 @@ CREATE TABLE IF NOT EXISTS landlord_reviews (
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(landlord_id, user_id)
 );
+
+-- Add foreign key constraints explicitly after table creation
+DO $$
+BEGIN
+  -- Add landlord_id foreign key constraint
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint 
+    WHERE conname = 'landlord_reviews_landlord_id_fkey'
+  ) THEN
+    ALTER TABLE landlord_reviews 
+    ADD CONSTRAINT landlord_reviews_landlord_id_fkey 
+    FOREIGN KEY (landlord_id) 
+    REFERENCES landlords(id) 
+    ON DELETE CASCADE;
+  END IF;
+  
+  -- Add user_id foreign key constraint
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint 
+    WHERE conname = 'landlord_reviews_user_id_fkey'
+  ) THEN
+    ALTER TABLE landlord_reviews 
+    ADD CONSTRAINT landlord_reviews_user_id_fkey 
+    FOREIGN KEY (user_id) 
+    REFERENCES user_profiles(id) 
+    ON DELETE CASCADE;
+  END IF;
+END $$;
 
 DO $$
 BEGIN
