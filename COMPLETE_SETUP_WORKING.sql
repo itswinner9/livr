@@ -354,6 +354,35 @@ END $$;
 -- PART 8: LANDLORD REVIEWS TABLE
 -- ============================================================================
 
+-- Ensure landlords table exists first
+CREATE TABLE IF NOT EXISTS landlords (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  slug TEXT UNIQUE,
+  company_name TEXT,
+  email TEXT,
+  phone TEXT,
+  website TEXT,
+  city TEXT,
+  province TEXT,
+  country TEXT DEFAULT 'Canada',
+  description TEXT,
+  profile_image TEXT,
+  overall_rating NUMERIC(3, 2) DEFAULT 0,
+  responsiveness_rating NUMERIC(3, 2) DEFAULT 0,
+  maintenance_rating NUMERIC(3, 2) DEFAULT 0,
+  communication_rating NUMERIC(3, 2) DEFAULT 0,
+  fairness_rating NUMERIC(3, 2) DEFAULT 0,
+  professionalism_rating NUMERIC(3, 2) DEFAULT 0,
+  total_reviews INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================================================
+-- PART 8: LANDLORD REVIEWS TABLE (AFTER landlords table exists)
+-- ============================================================================
+
 CREATE TABLE IF NOT EXISTS landlord_reviews (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   landlord_id UUID NOT NULL REFERENCES landlords(id) ON DELETE CASCADE,
