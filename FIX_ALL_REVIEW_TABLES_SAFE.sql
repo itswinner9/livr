@@ -229,26 +229,82 @@ END $$;
 
 CREATE TABLE IF NOT EXISTS rent_company_reviews (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  company_id UUID REFERENCES rent_companies(id) ON DELETE CASCADE,
+  rent_company_id UUID REFERENCES rent_companies(id) ON DELETE CASCADE,
   user_id UUID REFERENCES user_profiles(id) ON DELETE CASCADE,
   overall_rating INTEGER CHECK (overall_rating BETWEEN 1 AND 5),
+  service_rating INTEGER CHECK (service_rating BETWEEN 1 AND 5),
+  pricing_rating INTEGER CHECK (pricing_rating BETWEEN 1 AND 5),
+  communication_rating INTEGER CHECK (communication_rating BETWEEN 1 AND 5),
+  reliability_rating INTEGER CHECK (reliability_rating BETWEEN 1 AND 5),
+  professionalism_rating INTEGER CHECK (professionalism_rating BETWEEN 1 AND 5),
+  title TEXT,
   review TEXT,
+  review_text TEXT,
   comment TEXT,
   images TEXT[],
+  years_used INTEGER,
+  would_recommend BOOLEAN,
   is_anonymous BOOLEAN DEFAULT false,
   display_name TEXT,
   status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(company_id, user_id)
+  UNIQUE(rent_company_id, user_id)
 );
 
 -- Add missing columns to rent_company_reviews
 DO $$ 
 BEGIN
+  -- Fix column name: rent_company_id (not company_id)
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                 WHERE table_name = 'rent_company_reviews' AND column_name = 'rent_company_id') THEN
+    -- If company_id exists, rename it
+    IF EXISTS (SELECT 1 FROM information_schema.columns 
+               WHERE table_name = 'rent_company_reviews' AND column_name = 'company_id') THEN
+      ALTER TABLE rent_company_reviews RENAME COLUMN company_id TO rent_company_id;
+    ELSE
+      ALTER TABLE rent_company_reviews ADD COLUMN rent_company_id UUID REFERENCES rent_companies(id) ON DELETE CASCADE;
+    END IF;
+  END IF;
+  
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
                  WHERE table_name = 'rent_company_reviews' AND column_name = 'overall_rating') THEN
     ALTER TABLE rent_company_reviews ADD COLUMN overall_rating INTEGER CHECK (overall_rating BETWEEN 1 AND 5);
+  END IF;
+  
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                 WHERE table_name = 'rent_company_reviews' AND column_name = 'service_rating') THEN
+    ALTER TABLE rent_company_reviews ADD COLUMN service_rating INTEGER CHECK (service_rating BETWEEN 1 AND 5);
+  END IF;
+  
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                 WHERE table_name = 'rent_company_reviews' AND column_name = 'pricing_rating') THEN
+    ALTER TABLE rent_company_reviews ADD COLUMN pricing_rating INTEGER CHECK (pricing_rating BETWEEN 1 AND 5);
+  END IF;
+  
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                 WHERE table_name = 'rent_company_reviews' AND column_name = 'communication_rating') THEN
+    ALTER TABLE rent_company_reviews ADD COLUMN communication_rating INTEGER CHECK (communication_rating BETWEEN 1 AND 5);
+  END IF;
+  
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                 WHERE table_name = 'rent_company_reviews' AND column_name = 'reliability_rating') THEN
+    ALTER TABLE rent_company_reviews ADD COLUMN reliability_rating INTEGER CHECK (reliability_rating BETWEEN 1 AND 5);
+  END IF;
+  
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                 WHERE table_name = 'rent_company_reviews' AND column_name = 'professionalism_rating') THEN
+    ALTER TABLE rent_company_reviews ADD COLUMN professionalism_rating INTEGER CHECK (professionalism_rating BETWEEN 1 AND 5);
+  END IF;
+  
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                 WHERE table_name = 'rent_company_reviews' AND column_name = 'title') THEN
+    ALTER TABLE rent_company_reviews ADD COLUMN title TEXT;
+  END IF;
+  
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                 WHERE table_name = 'rent_company_reviews' AND column_name = 'review_text') THEN
+    ALTER TABLE rent_company_reviews ADD COLUMN review_text TEXT;
   END IF;
   
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
@@ -262,9 +318,34 @@ BEGIN
   END IF;
   
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                 WHERE table_name = 'rent_company_reviews' AND column_name = 'years_used') THEN
+    ALTER TABLE rent_company_reviews ADD COLUMN years_used INTEGER;
+  END IF;
+  
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                 WHERE table_name = 'rent_company_reviews' AND column_name = 'would_recommend') THEN
+    ALTER TABLE rent_company_reviews ADD COLUMN would_recommend BOOLEAN;
+  END IF;
+  
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                 WHERE table_name = 'rent_company_reviews' AND column_name = 'is_anonymous') THEN
+    ALTER TABLE rent_company_reviews ADD COLUMN is_anonymous BOOLEAN DEFAULT false;
+  END IF;
+  
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                 WHERE table_name = 'rent_company_reviews' AND column_name = 'display_name') THEN
+    ALTER TABLE rent_company_reviews ADD COLUMN display_name TEXT;
+  END IF;
+  
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
                  WHERE table_name = 'rent_company_reviews' AND column_name = 'status') THEN
     ALTER TABLE rent_company_reviews ADD COLUMN status TEXT DEFAULT 'pending';
     UPDATE rent_company_reviews SET status = 'approved' WHERE status IS NULL;
+  END IF;
+  
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                 WHERE table_name = 'rent_company_reviews' AND column_name = 'updated_at') THEN
+    ALTER TABLE rent_company_reviews ADD COLUMN updated_at TIMESTAMPTZ DEFAULT NOW();
   END IF;
 END $$;
 
@@ -293,7 +374,7 @@ CREATE INDEX IF NOT EXISTS idx_landlord_reviews_landlord ON landlord_reviews(lan
 CREATE INDEX IF NOT EXISTS idx_landlord_reviews_user ON landlord_reviews(user_id);
 CREATE INDEX IF NOT EXISTS idx_landlord_reviews_status ON landlord_reviews(status);
 
-CREATE INDEX IF NOT EXISTS idx_rent_company_reviews_company ON rent_company_reviews(company_id);
+CREATE INDEX IF NOT EXISTS idx_rent_company_reviews_company ON rent_company_reviews(rent_company_id);
 CREATE INDEX IF NOT EXISTS idx_rent_company_reviews_user ON rent_company_reviews(user_id);
 CREATE INDEX IF NOT EXISTS idx_rent_company_reviews_status ON rent_company_reviews(status);
 
