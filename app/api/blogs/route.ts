@@ -8,7 +8,7 @@ export async function GET() {
     safeSupabaseRequest(async () => {
       const { data, error } = await supabase
         .from('blogs')
-        .select('id, title, slug, excerpt, featured_image, published_at, author_id')
+        .select('id, title, slug, excerpt, cover_image, published_at, author_id')
         .eq('status', 'published')
         .eq('featured', true)
         .order('published_at', { ascending: false })
@@ -20,7 +20,7 @@ export async function GET() {
     safeSupabaseRequest(async () => {
       const { data, error } = await supabase
         .from('blogs')
-        .select('id, title, slug, excerpt, featured_image, published_at, author_id')
+        .select('id, title, slug, excerpt, cover_image, published_at, author_id')
         .eq('status', 'published')
         .or('featured.is.null,featured.eq.false')
         .order('published_at', { ascending: false })

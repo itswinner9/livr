@@ -95,135 +95,94 @@ export default function LandlordPage() {
   }, [currentUser, reviews])
 
   const checkCurrentUser = async () => {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (session?.user) {
-      setCurrentUser(session.user)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session?.user) {
+        setCurrentUser(session.user)
+      }
+    } catch (error) {
+      console.error('Error checking current user:', error)
+      // Don't block page load if auth check fails
     }
   }
 
   const fetchLandlord = async () => {
     try {
       setLoading(true)
-      // Try to find landlord by slug first, then by ID
-      let { data: landlordData, error: landlordError } = await supabase
-        .from('landlords')
-        .select('*')
-        .eq('slug', params.id)
-        .single()
-
-      // If not found by slug, try by ID
-      if (landlordError && landlordError.code === 'PGRST116') {
-        const { data: landlordByIdData, error: landlordByIdError } = await supabase
-          .from('landlords')
-          .select('*')
-          .eq('id', params.id)
-          .single()
-        
-        landlordData = landlordByIdData
-        landlordError = landlordByIdError
+      
+      // Use API route for reliable data fetching
+      const response = await fetch(`/api/landlord/${params.id}`)
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        console.error('Error fetching landlord:', errorData)
+        alert(errorData.error || 'Failed to load landlord. Please try again.')
+        setLandlord(null)
+        setLoading(false)
+        return
       }
 
-      if (landlordError) {
-        console.error('Error fetching landlord:', landlordError)
+      const data = await response.json()
+      const { landlord: landlordData, reviews: reviewsData, pendingCount, verifiedUserIds } = data
+
+      if (!landlordData) {
+        console.error('No landlord data received')
+        alert('Landlord not found')
         setLandlord(null)
         setLoading(false)
         return
       }
 
       setLandlord(landlordData)
+      setPendingReviewCount(pendingCount || 0)
+      setVerifiedUsers(new Set(verifiedUserIds || []))
 
-      // Fetch approved reviews only using the actual landlord ID (limit to 50 initially for performance)
-      const { data: reviewsData, error: reviewsError } = await supabase
-        .from('landlord_reviews')
-        .select('id, user_id, review, comment, pros, cons, overall_rating, responsiveness, responsiveness_rating, maintenance, maintenance_rating, communication, communication_rating, fairness, fairness_rating, professionalism, professionalism_rating, years_rented, monthly_rent, would_recommend, is_anonymous, display_name, created_at, status, images, verification_request_id')
-        .eq('landlord_id', landlordData.id)
-        .eq('status', 'approved')
-        .order('created_at', { ascending: false })
-        .limit(50)
-
-      // Fetch pending reviews count
-      const { data: pendingData } = await supabase
-        .from('landlord_reviews')
-        .select('id')
-        .eq('landlord_id', landlordData.id)
-        .eq('status', 'pending')
-      
-      setPendingReviewCount(pendingData?.length || 0)
-
-      if (reviewsError) {
-        console.error('Error fetching reviews:', reviewsError)
-      } else {
+      // Process reviews and photos
+      if (reviewsData && reviewsData.length > 0) {
         console.log('📸 Fetched reviews:', reviewsData)
-        if (reviewsData) {
-          reviewsData.forEach((review: any) => {
-            console.log(`Review ${review.id} images:`, review.images)
-          })
-          
-          // Fetch verified users
-          const userIds = reviewsData.map((r: any) => r.user_id).filter(Boolean)
-          let verifiedSet = new Set<string>()
-          if (userIds.length > 0) {
-            const { data: profiles } = await supabase
-              .from('user_profiles')
-              .select('id, is_verified_tenant')
-              .in('id', userIds)
-            
-            if (profiles) {
-              verifiedSet = new Set(
-                profiles.filter((p: UserProfile) => p.is_verified_tenant).map((p: UserProfile) => p.id)
-              )
-              setVerifiedUsers(verifiedSet)
-            }
-          }
-          
-          // Collect all photos for gallery
-          const photoList: Array<{url: string, reviewId: string, userId: string, displayName: string}> = []
-          reviewsData.forEach((review: any) => {
-            if (review.images) {
-              let imageUrls: string[] = []
-              if (Array.isArray(review.images)) {
-                imageUrls = review.images
-              } else if (typeof review.images === 'string') {
-                try {
-                  const parsed = JSON.parse(review.images)
-                  imageUrls = Array.isArray(parsed) ? parsed : [review.images]
-                } catch {
-                  imageUrls = [review.images]
-                }
+        
+        // Collect all photos for gallery
+        const photoList: Array<{url: string, reviewId: string, userId: string, displayName: string}> = []
+        reviewsData.forEach((review: any) => {
+          if (review.images) {
+            let imageUrls: string[] = []
+            if (Array.isArray(review.images)) {
+              imageUrls = review.images
+            } else if (typeof review.images === 'string') {
+              try {
+                const parsed = JSON.parse(review.images)
+                imageUrls = Array.isArray(parsed) ? parsed : [review.images]
+              } catch {
+                imageUrls = [review.images]
               }
-              
-              imageUrls.forEach((url: string) => {
-                photoList.push({
-                  url,
-                  reviewId: review.id,
-                  userId: review.user_id,
-                  displayName: review.is_anonymous ? 'Anonymous User' : (review.display_name || 'Anonymous User')
-                })
-              })
             }
-          })
-          setAllPhotos(photoList)
-          
-          // Sort: verified reviews first, then by date
-          const sortedReviews = (reviewsData || []).sort((a: Review, b: Review) => {
-            const aVerified = verifiedSet.has(a.user_id)
-            const bVerified = verifiedSet.has(b.user_id)
-            if (aVerified && !bVerified) return -1
-            if (!aVerified && bVerified) return 1
-            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-          })
-          
-          setReviews(sortedReviews)
-        }
+            
+            imageUrls.forEach((url: string) => {
+              photoList.push({
+                url,
+                reviewId: review.id,
+                userId: review.user_id,
+                displayName: review.is_anonymous ? 'Anonymous User' : (review.display_name || 'Anonymous User')
+              })
+            })
+          }
+        })
+        setAllPhotos(photoList)
+        setReviews(reviewsData)
         
         // Check if current user has reviewed this landlord
-        if (currentUser && reviewsData) {
+        if (currentUser) {
           const userReview = reviewsData.find((review: any) => review.user_id === currentUser.id)
           setHasReviewed(!!userReview)
         }
+      } else {
+        setReviews([])
+        setAllPhotos([])
       }
-    } catch (error) {
-      console.error('Error:', error)
+    } catch (error: any) {
+      console.error('Error fetching landlord:', error)
+      alert('Failed to load landlord: ' + (error.message || 'Unknown error'))
+      setLandlord(null)
     } finally {
       setLoading(false)
     }
