@@ -256,7 +256,7 @@ export default function RateBuilding() {
       const reviewData = {
         ...Object.fromEntries(ratings.map(r => [r.id, r.value])),
         overall_rating: avgRating,
-        review: comment || null,
+        comment: comment || null,
         images: imageUrls.length > 0 ? imageUrls : null,
         is_anonymous: isAnonymous,
         display_name: !isAnonymous ? displayName : null,
