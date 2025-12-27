@@ -59,20 +59,34 @@ function ExploreContent() {
         sortBy: filters.sortBy,
       })
 
+      console.log('📡 Fetching from /api/explore:', params.toString())
+
       const response = await fetch(`/api/explore?${params.toString()}`, {
         signal: abortControllerRef.current.signal,
       })
 
+      console.log('📥 Response status:', response.status, response.statusText)
+
       if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        console.error('❌ API Error:', response.status, errorData)
+        
         if (response.status === 504) {
           console.error('Request timed out')
           setLoading(false)
           return
         }
-        throw new Error('Failed to fetch data')
+        throw new Error(errorData.error || `Failed to fetch data: ${response.status}`)
       }
 
       const data = await response.json()
+      console.log('✅ Data received:', {
+        neighborhoods: data.neighborhoods?.length || 0,
+        buildings: data.buildings?.length || 0,
+        landlords: data.landlords?.length || 0,
+        rentCompanies: data.rentCompanies?.length || 0,
+      })
+
       setNeighborhoods(data.neighborhoods || [])
       setBuildings(data.buildings || [])
       setLandlords(data.landlords || [])

@@ -8,6 +8,13 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env
 const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
 export async function GET(request: NextRequest) {
+  // Log configuration (server-side only)
+  console.log('🔍 Explore API called:', {
+    supabaseUrl: supabaseUrl ? '✅ Set' : '❌ Missing',
+    supabaseKey: supabaseAnonKey ? '✅ Set' : '❌ Missing',
+    url: supabaseUrl,
+  })
+
   const searchParams = request.nextUrl.searchParams
   const category = searchParams.get('category') || 'all'
   const searchQuery = searchParams.get('q') || ''
@@ -16,6 +23,8 @@ export async function GET(request: NextRequest) {
   const hasReviews = searchParams.get('hasReviews') === 'true'
   const multipleReviews = searchParams.get('multipleReviews') === 'true'
   const sortBy = searchParams.get('sortBy') || 'rating'
+
+  console.log('📊 Query params:', { category, searchQuery, location, ratingMin, hasReviews, multipleReviews, sortBy })
 
   // Fetch all requested categories in parallel
   const result = await safeSupabaseRequest(async () => {
@@ -88,12 +97,15 @@ export async function GET(request: NextRequest) {
       promises.push(
         buildQuery('neighborhoods', ['name', 'city', 'province'], neighborhoodColumns).then(({ data, error }: any) => {
           if (error) {
-            console.error('Error fetching neighborhoods:', error)
+            console.error('❌ Error fetching neighborhoods:', error.message || error)
+            throw error // Re-throw to be caught by safeSupabaseRequest
           }
-          if (!error && data) results.neighborhoods = data
+          console.log(`✅ Neighborhoods fetched: ${data?.length || 0} items`)
+          if (data) results.neighborhoods = data
           return data
         }).catch((err: any) => {
-          console.error('Neighborhoods query failed:', err)
+          console.error('❌ Neighborhoods query exception:', err.message || err)
+          results.neighborhoods = [] // Ensure empty array on error
           return []
         })
       )
@@ -104,12 +116,15 @@ export async function GET(request: NextRequest) {
       promises.push(
         buildQuery('buildings', ['name', 'city', 'province'], buildingColumns).then(({ data, error }: any) => {
           if (error) {
-            console.error('Error fetching buildings:', error)
+            console.error('❌ Error fetching buildings:', error.message || error)
+            throw error
           }
-          if (!error && data) results.buildings = data
+          console.log(`✅ Buildings fetched: ${data?.length || 0} items`)
+          if (data) results.buildings = data
           return data
         }).catch((err: any) => {
-          console.error('Buildings query failed:', err)
+          console.error('❌ Buildings query exception:', err.message || err)
+          results.buildings = []
           return []
         })
       )
@@ -120,12 +135,15 @@ export async function GET(request: NextRequest) {
       promises.push(
         buildQuery('landlords', ['name', 'city'], landlordColumns).then(({ data, error }: any) => {
           if (error) {
-            console.error('Error fetching landlords:', error)
+            console.error('❌ Error fetching landlords:', error.message || error)
+            throw error
           }
-          if (!error && data) results.landlords = data
+          console.log(`✅ Landlords fetched: ${data?.length || 0} items`)
+          if (data) results.landlords = data
           return data
         }).catch((err: any) => {
-          console.error('Landlords query failed:', err)
+          console.error('❌ Landlords query exception:', err.message || err)
+          results.landlords = []
           return []
         })
       )
@@ -136,18 +154,27 @@ export async function GET(request: NextRequest) {
       promises.push(
         buildQuery('rent_companies', ['name', 'city'], companyColumns).then(({ data, error }: any) => {
           if (error) {
-            console.error('Error fetching companies:', error)
+            console.error('❌ Error fetching companies:', error.message || error)
+            throw error
           }
-          if (!error && data) results.rentCompanies = data
+          console.log(`✅ Companies fetched: ${data?.length || 0} items`)
+          if (data) results.rentCompanies = data
           return data
         }).catch((err: any) => {
-          console.error('Companies query failed:', err)
+          console.error('❌ Companies query exception:', err.message || err)
+          results.rentCompanies = []
           return []
         })
       )
     }
 
     await Promise.all(promises)
+    console.log('📦 Final results:', {
+      neighborhoods: results.neighborhoods.length,
+      buildings: results.buildings.length,
+      landlords: results.landlords.length,
+      rentCompanies: results.rentCompanies.length,
+    })
     return results
   }, { timeoutMs: 6000, retries: 0 })
 
@@ -159,18 +186,32 @@ export async function GET(request: NextRequest) {
   }
 
   if (result.error) {
+    console.error('❌ Explore API error:', result.error.message, result.error)
     return NextResponse.json(
-      { error: result.error.message },
+      { 
+        error: result.error.message || 'Failed to fetch data',
+        details: result.error.details,
+        code: result.error.code,
+      },
       { status: result.error.status ?? 500 }
     )
   }
 
-  const response = NextResponse.json({
+  const responseData = {
     neighborhoods: result.data?.neighborhoods || [],
     buildings: result.data?.buildings || [],
     landlords: result.data?.landlords || [],
     rentCompanies: result.data?.rentCompanies || [],
+  }
+
+  console.log('✅ Explore API success, returning:', {
+    neighborhoods: responseData.neighborhoods.length,
+    buildings: responseData.buildings.length,
+    landlords: responseData.landlords.length,
+    rentCompanies: responseData.rentCompanies.length,
   })
+
+  const response = NextResponse.json(responseData)
   
   // Add caching headers for better performance
   response.headers.set('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=120')
