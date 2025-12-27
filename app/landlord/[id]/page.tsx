@@ -730,41 +730,56 @@ export default function LandlordPage() {
 
                           {/* Category Ratings - Compact */}
                           <div className="flex flex-wrap gap-1 mb-2 pt-2 border-t border-gray-100">
-                            {(review.responsiveness || review.responsiveness_rating) && (
-                              <div className="flex items-center space-x-0.5 bg-gray-50 px-1.5 py-0.5 rounded">
-                                <span className="text-[9px] font-medium text-gray-600">Resp</span>
-                                <Star className="w-2 h-2 text-amber-400 fill-amber-400" />
-                                <span className={`text-[9px] font-bold ${getRatingTextColor(review.responsiveness || review.responsiveness_rating || 0)}`}>{(review.responsiveness || review.responsiveness_rating).toFixed(1)}</span>
-                              </div>
-                            )}
-                            {(review.maintenance || review.maintenance_rating) && (
-                              <div className="flex items-center space-x-0.5 bg-gray-50 px-1.5 py-0.5 rounded">
-                                <span className="text-[9px] font-medium text-gray-600">Maint</span>
-                                <Star className="w-2 h-2 text-amber-400 fill-amber-400" />
-                                <span className={`text-[9px] font-bold ${getRatingTextColor(review.maintenance || review.maintenance_rating || 0)}`}>{(review.maintenance || review.maintenance_rating).toFixed(1)}</span>
-                              </div>
-                            )}
-                            {(review.communication || review.communication_rating) && (
-                              <div className="flex items-center space-x-0.5 bg-gray-50 px-1.5 py-0.5 rounded">
-                                <span className="text-[9px] font-medium text-gray-600">Comm</span>
-                                <Star className="w-2 h-2 text-amber-400 fill-amber-400" />
-                                <span className={`text-[9px] font-bold ${getRatingTextColor(review.communication || review.communication_rating || 0)}`}>{(review.communication || review.communication_rating).toFixed(1)}</span>
-                              </div>
-                            )}
-                            {(review.fairness || review.fairness_rating) && (
-                              <div className="flex items-center space-x-0.5 bg-gray-50 px-1.5 py-0.5 rounded">
-                                <span className="text-[9px] font-medium text-gray-600">Fair</span>
-                                <Star className="w-2 h-2 text-amber-400 fill-amber-400" />
-                                <span className={`text-[9px] font-bold ${getRatingTextColor(review.fairness || review.fairness_rating || 0)}`}>{(review.fairness || review.fairness_rating).toFixed(1)}</span>
-                              </div>
-                            )}
-                            {(review.professionalism || review.professionalism_rating) && (
-                              <div className="flex items-center space-x-0.5 bg-gray-50 px-1.5 py-0.5 rounded">
-                                <span className="text-[9px] font-medium text-gray-600">Prof</span>
-                                <Star className="w-2 h-2 text-amber-400 fill-amber-400" />
-                                <span className={`text-[9px] font-bold ${getRatingTextColor(review.professionalism || review.professionalism_rating || 0)}`}>{(review.professionalism || review.professionalism_rating).toFixed(1)}</span>
-                              </div>
-                            )}
+                            {(review.responsiveness || review.responsiveness_rating) && (() => {
+                              const rating = review.responsiveness ?? review.responsiveness_rating ?? 0
+                              return (
+                                <div className="flex items-center space-x-0.5 bg-gray-50 px-1.5 py-0.5 rounded">
+                                  <span className="text-[9px] font-medium text-gray-600">Resp</span>
+                                  <Star className="w-2 h-2 text-amber-400 fill-amber-400" />
+                                  <span className={`text-[9px] font-bold ${getRatingTextColor(rating)}`}>{rating.toFixed(1)}</span>
+                                </div>
+                              )
+                            })()}
+                            {(review.maintenance || review.maintenance_rating) && (() => {
+                              const rating = review.maintenance ?? review.maintenance_rating ?? 0
+                              return (
+                                <div className="flex items-center space-x-0.5 bg-gray-50 px-1.5 py-0.5 rounded">
+                                  <span className="text-[9px] font-medium text-gray-600">Maint</span>
+                                  <Star className="w-2 h-2 text-amber-400 fill-amber-400" />
+                                  <span className={`text-[9px] font-bold ${getRatingTextColor(rating)}`}>{rating.toFixed(1)}</span>
+                                </div>
+                              )
+                            })()}
+                            {(review.communication || review.communication_rating) && (() => {
+                              const rating = review.communication ?? review.communication_rating ?? 0
+                              return (
+                                <div className="flex items-center space-x-0.5 bg-gray-50 px-1.5 py-0.5 rounded">
+                                  <span className="text-[9px] font-medium text-gray-600">Comm</span>
+                                  <Star className="w-2 h-2 text-amber-400 fill-amber-400" />
+                                  <span className={`text-[9px] font-bold ${getRatingTextColor(rating)}`}>{rating.toFixed(1)}</span>
+                                </div>
+                              )
+                            })()}
+                            {(review.fairness || review.fairness_rating) && (() => {
+                              const rating = review.fairness ?? review.fairness_rating ?? 0
+                              return (
+                                <div className="flex items-center space-x-0.5 bg-gray-50 px-1.5 py-0.5 rounded">
+                                  <span className="text-[9px] font-medium text-gray-600">Fair</span>
+                                  <Star className="w-2 h-2 text-amber-400 fill-amber-400" />
+                                  <span className={`text-[9px] font-bold ${getRatingTextColor(rating)}`}>{rating.toFixed(1)}</span>
+                                </div>
+                              )
+                            })()}
+                            {(review.professionalism || review.professionalism_rating) && (() => {
+                              const rating = review.professionalism ?? review.professionalism_rating ?? 0
+                              return (
+                                <div className="flex items-center space-x-0.5 bg-gray-50 px-1.5 py-0.5 rounded">
+                                  <span className="text-[9px] font-medium text-gray-600">Prof</span>
+                                  <Star className="w-2 h-2 text-amber-400 fill-amber-400" />
+                                  <span className={`text-[9px] font-bold ${getRatingTextColor(rating)}`}>{rating.toFixed(1)}</span>
+                                </div>
+                              )
+                            })()}
                           </div>
 
                           {/* Additional Info - Compact */}
