@@ -1,7 +1,0 @@
-User-Agent: *
-Allow: /
-Disallow: /admin/
-Disallow: /api/
-Disallow: /profile/
-
-Sitemap: https://livrank.ca/sitemap.xml
