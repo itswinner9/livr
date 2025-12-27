@@ -50,7 +50,7 @@ function AuthCallbackContent() {
           return
         }
 
-        // Handle hash-based OAuth (implicit flow)
+        // Handle hash-based OAuth (implicit flow) - DEPRECATED, but handle gracefully
         if (hash && hash.includes('access_token')) {
           if (mounted) setStatus('Setting up your session...')
           
@@ -70,20 +70,18 @@ function AuthCallbackContent() {
             try {
               console.log('🔐 Setting session from hash...')
               
-              // Set timeout for this operation
+              // Set timeout for this operation (5 seconds max)
               const sessionPromise = supabase.auth.setSession({
                 access_token: accessToken,
                 refresh_token: refreshToken,
               })
               
-              const timeoutPromise = new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('Session setup timed out')), 8000)
+              const timeoutPromise = new Promise<never>((_, reject) => 
+                setTimeout(() => reject(new Error('Session setup timed out')), 5000)
               )
               
-              const { data, error: sessionError } = await Promise.race([
-                sessionPromise,
-                timeoutPromise
-              ]) as any
+              const result = await Promise.race([sessionPromise, timeoutPromise])
+              const { data, error: sessionError } = result as any
               
               if (sessionError) {
                 console.error('❌ Session error:', sessionError)
@@ -92,9 +90,7 @@ function AuthCallbackContent() {
               
               if (data?.session) {
                 console.log('✅ Session created from hash! User:', data.session.user.email)
-                if (mounted) setStatus('Login successful! Redirecting...')
-                
-                // Redirect immediately
+                // Redirect immediately - don't wait
                 window.location.replace('/')
                 return
               } else {
@@ -102,24 +98,14 @@ function AuthCallbackContent() {
               }
             } catch (err: any) {
               console.error('❌ Error setting session from hash:', err)
-              if (mounted) {
-                setError(err.message || 'Failed to set session')
-                setStatus('Authentication failed')
-              }
-              redirectTimeout = setTimeout(() => {
-                window.location.href = '/login?error=auth_failed'
-              }, 2000)
+              // Redirect immediately on error
+              window.location.href = '/login?error=auth_failed'
               return
             }
           } else {
             console.error('❌ Missing tokens in hash')
-            if (mounted) {
-              setError('Missing authentication tokens in URL')
-              setStatus('Authentication failed')
-            }
-            redirectTimeout = setTimeout(() => {
-              window.location.href = '/login?error=auth_failed'
-            }, 2000)
+            // Redirect immediately on error
+            window.location.href = '/login?error=auth_failed'
             return
           }
         }
@@ -131,17 +117,15 @@ function AuthCallbackContent() {
           try {
             console.log('🔐 Exchanging code for session...')
             
-            // Set timeout for this operation
+            // Set timeout for this operation (5 seconds max)
             const exchangePromise = supabase.auth.exchangeCodeForSession(code)
             
-            const timeoutPromise = new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('Code exchange timed out')), 8000)
+            const timeoutPromise = new Promise<never>((_, reject) => 
+              setTimeout(() => reject(new Error('Code exchange timed out')), 5000)
             )
             
-            const { data, error: codeError } = await Promise.race([
-              exchangePromise,
-              timeoutPromise
-            ]) as any
+            const result = await Promise.race([exchangePromise, timeoutPromise])
+            const { data, error: codeError } = result as any
             
             if (codeError) {
               console.error('❌ Code exchange error:', codeError)
@@ -150,9 +134,7 @@ function AuthCallbackContent() {
             
             if (data?.session) {
               console.log('✅ Code exchanged successfully! User:', data.session.user.email)
-              if (mounted) setStatus('Login successful! Redirecting...')
-              
-              // Redirect immediately
+              // Redirect immediately - don't wait
               window.location.replace('/')
               return
             } else {
@@ -160,34 +142,24 @@ function AuthCallbackContent() {
             }
           } catch (err: any) {
             console.error('❌ Error exchanging code:', err)
-            const errorMsg = err.message?.includes('timed out') 
-              ? 'Request timed out. Please try again.'
-              : (err.message || 'Failed to exchange authorization code')
-            if (mounted) {
-              setError(errorMsg)
-              setStatus('Authentication failed')
-            }
-            redirectTimeout = setTimeout(() => {
-              window.location.href = '/login?error=auth_failed'
-            }, 2000)
+            // Redirect immediately on error
+            window.location.href = '/login?error=auth_failed'
             return
           }
         }
         
-        // No hash or code - check if already authenticated
+        // No hash or code - check if already authenticated (quick check, 3 seconds max)
         console.log('⚠️ No hash or code found, checking existing session...')
         if (mounted) setStatus('Checking existing session...')
         
         try {
           const sessionPromise = supabase.auth.getSession()
-          const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Session check timed out')), 5000)
+          const timeoutPromise = new Promise<never>((_, reject) => 
+            setTimeout(() => reject(new Error('Session check timed out')), 3000)
           )
           
-          const { data: { session }, error: sessionError } = await Promise.race([
-            sessionPromise,
-            timeoutPromise
-          ]) as any
+          const result = await Promise.race([sessionPromise, timeoutPromise])
+          const { data: { session }, error: sessionError } = result as any
           
           if (sessionError) {
             console.error('❌ Error checking session:', sessionError)
@@ -196,7 +168,6 @@ function AuthCallbackContent() {
           
           if (session) {
             console.log('✅ Already authenticated, redirecting...')
-            if (mounted) setStatus('Redirecting...')
             window.location.replace('/')
             return
           }
@@ -204,15 +175,9 @@ function AuthCallbackContent() {
           console.error('❌ Error checking session:', err)
         }
         
-        // No session found - redirect to login
+        // No session found - redirect to login immediately
         console.log('❌ No authentication found - redirecting to login')
-        if (mounted) {
-          setError('No authentication information found')
-          setStatus('Redirecting to login...')
-        }
-        redirectTimeout = setTimeout(() => {
-          window.location.href = '/login?error=no_auth'
-        }, 2000)
+        window.location.href = '/login?error=no_auth'
         
       } catch (err: any) {
         console.error('❌ Unexpected error in callback:', err)
@@ -233,15 +198,11 @@ function AuthCallbackContent() {
       processAuth()
     }, 100)
 
-    // Safety timeout - redirect after 10 seconds if still processing
+    // Safety timeout - redirect after 8 seconds if still processing (reduced from 10s)
     const safetyTimeout = setTimeout(() => {
-      console.warn('⚠️ Safety timeout (10s) - redirecting to login')
-      if (mounted && !error) {
-        setError('Authentication timed out. Please try logging in again.')
-        setStatus('Redirecting to login...')
-      }
+      console.warn('⚠️ Safety timeout (8s) - redirecting to login')
       window.location.href = '/login?error=timeout'
-    }, 10000)
+    }, 8000)
 
     return () => {
       mounted = false
