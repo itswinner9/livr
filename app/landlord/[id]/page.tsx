@@ -138,6 +138,13 @@ export default function LandlordPage() {
       setVerifiedUsers(new Set(verifiedUserIds || []))
 
       // Process reviews and photos
+      console.log('📊 Reviews data received:', { 
+        reviewsCount: reviewsData?.length || 0, 
+        totalReviews: landlordData.total_reviews,
+        pendingCount: pendingCount,
+        reviews: reviewsData 
+      })
+      
       if (reviewsData && reviewsData.length > 0) {
         console.log('📸 Fetched reviews:', reviewsData)
         
