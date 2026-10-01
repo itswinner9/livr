@@ -15,11 +15,13 @@ export function HomeDossier({
   facets,
   listings,
   token,
+  databaseReady,
 }: {
   filters: ListingFiltersState;
   facets: ListingFacets;
   listings: ListingCardModel[];
   token: string | null;
+  databaseReady: boolean;
 }) {
   const recent = [...listings]
     .sort((a, b) => (b.property.last_review_date ?? "").localeCompare(a.property.last_review_date ?? ""))
@@ -139,10 +141,16 @@ export function HomeDossier({
           </div>
           {recent.length === 0 ? (
             <p className="text-sm text-mute">
-              No buildings on file yet.{" "}
-              <Link className="font-semibold text-accent hover:text-accent-hover" href="/rate">
-                Write a review
-              </Link>
+              {databaseReady ? (
+                <>
+                  No buildings on file yet.{" "}
+                  <Link className="font-semibold text-accent hover:text-accent-hover" href="/rate">
+                    Write a review
+                  </Link>
+                </>
+              ) : (
+                "Building records aren’t loading on this deploy. Set the livrank Supabase env vars and trigger a new production deploy."
+              )}
             </p>
           ) : (
             <div className="grid grid-cols-1 gap-7 lg:grid-cols-3">
