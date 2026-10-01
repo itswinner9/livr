@@ -1,308 +1,312 @@
-// SEO Utilities for LivRank
-// Generates slugs, structured data, and meta content for buildings, neighborhoods, and landlords
+import type { Metadata } from "next";
+import { PROVINCE_NAMES, type ProvinceCode } from "@/lib/address/normalize";
+import { MIN_REVIEWS_FOR_RATING } from "@/lib/ratings/aggregate";
+import { PROPERTY_TYPE_LABELS, type Property, type RatingSummary } from "@/types/property";
 
-/**
- * Generate SEO-friendly slug from location name and city
- * Example: "King George, Surrey" → "king-george-surrey"
- */
-export function generateSlug(name: string, city: string): string {
-  return `${name}-${city}`
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, '') // Remove special chars
-    .replace(/\s+/g, '-') // Replace spaces with hyphens
-    .replace(/-+/g, '-') // Replace multiple hyphens with single
-    .replace(/^-+|-+$/g, '') // Trim hyphens from start/end
+export const SITE_NAME = "LivRank";
+export const SITE_TAGLINE = "Know the place before you rent it";
+export const SITE_DESCRIPTION =
+  "Read renter-reported reviews, ratings, and rent history for apartment buildings across Canada before you sign a lease. LivRank does not claim official rental history.";
+
+export function siteOrigin() {
+  return process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 }
 
-/**
- * Generate JSON-LD structured data for neighborhoods
- * This helps Google show rich snippets with ratings
- */
-export function generateNeighborhoodStructuredData(neighborhood: any, reviews: any[] = []) {
-  const reviewCount = reviews.length || neighborhood.total_reviews || 0
-  const averageRating = neighborhood.average_rating || 0
+export function jsonLdString(data: unknown) {
+  return JSON.stringify(data).replace(/</g, "\\u003c");
+}
 
+export function noIndexFollow(): Pick<Metadata, "robots"> {
+  return { robots: { index: false, follow: false } };
+}
+
+export function provinceLabel(code: string) {
+  return PROVINCE_NAMES[code as ProvinceCode] ?? code;
+}
+
+export function propertyDisplayName(property: Pick<Property, "building_name" | "address_line_1">) {
+  return property.building_name?.replace(/\s*\(Demo\)\s*/gi, "").trim() || property.address_line_1;
+}
+
+export function propertyTitle(property: Pick<Property, "address_line_1" | "city" | "province">) {
+  return `${property.address_line_1}, ${property.city} ${property.province}`;
+}
+
+export function propertyCanonicalPath(property: Pick<Property, "slug" | "id">) {
+  return `/property/${property.slug || property.id}`;
+}
+
+export function exploreCanonicalPath(filters: { city?: string; province?: string }) {
+  const params = new URLSearchParams();
+  if (filters.city) params.set("city", filters.city);
+  if (filters.province) params.set("province", filters.province);
+  const query = params.toString();
+  return query ? `/explore?${query}` : "/explore";
+}
+
+export function exploreHeading(filters: { city?: string; province?: string }) {
+  if (filters.city && filters.province) return `Buildings on file in ${filters.city}, ${filters.province}`;
+  if (filters.city) return `Buildings on file in ${filters.city}`;
+  if (filters.province) return `Buildings on file in ${provinceLabel(filters.province)}`;
+  return "Buildings on file";
+}
+
+export function exploreTitle(filters: { city?: string; province?: string }) {
+  if (filters.city && filters.province) {
+    return `Rental buildings in ${filters.city}, ${filters.province}`;
+  }
+  if (filters.city) return `Rental buildings in ${filters.city}`;
+  if (filters.province) return `Rental buildings in ${provinceLabel(filters.province)}`;
+  return "Explore rental buildings in Canada";
+}
+
+export function exploreDescription(
+  filters: { city?: string; province?: string },
+  buildingCount: number,
+) {
+  const place = filters.city
+    ? filters.province
+      ? `${filters.city}, ${filters.province}`
+      : filters.city
+    : filters.province
+      ? provinceLabel(filters.province)
+      : "Canada";
+  const count =
+    buildingCount > 0
+      ? `${buildingCount} ${buildingCount === 1 ? "building" : "buildings"} on file. `
+      : "";
+  return `${count}Read renter-reported reviews and rent history for rental buildings in ${place}. LivRank does not claim official rental history.`;
+}
+
+export function propertyDescription(input: {
+  property: Pick<Property, "address_line_1" | "city" | "province" | "rent_report_count">;
+  reviewCount: number;
+  rating: number | null;
+}) {
+  const { property, reviewCount, rating } = input;
+  const bits: string[] = [];
+  if (reviewCount > 0) {
+    bits.push(`${reviewCount} renter ${reviewCount === 1 ? "review" : "reviews"}`);
+  }
+  if (rating != null && reviewCount >= MIN_REVIEWS_FOR_RATING) {
+    bits.push(`average ${rating.toFixed(1)} out of 5`);
+  }
+  if (property.rent_report_count > 0) bits.push("renter-reported rent on file");
+  const facts = bits.length ? `${bits.join(", ")}. ` : "No published ratings yet. ";
+  return `Renter-reported file for ${property.address_line_1} in ${property.city}, ${property.province}. ${facts}LivRank does not claim official rental history.`;
+}
+
+export function openGraphShare(
+  title: string,
+  description: string,
+  path: string,
+  extra?: { type?: "website" | "article" },
+): NonNullable<Metadata["openGraph"]> {
   return {
-    '@context': 'https://schema.org',
-    '@type': 'Place',
-    name: `${neighborhood.name}, ${neighborhood.city}`,
-    address: {
-      '@type': 'PostalAddress',
-      addressLocality: neighborhood.city,
-      addressRegion: neighborhood.province,
-      addressCountry: 'CA'
+    type: extra?.type ?? "website",
+    locale: "en_CA",
+    siteName: SITE_NAME,
+    title,
+    description,
+    url: path,
+  };
+}
+
+export function organizationJsonLd() {
+  const origin = siteOrigin();
+  return {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: SITE_NAME,
+    url: origin,
+    description: SITE_DESCRIPTION,
+    areaServed: { "@type": "Country", name: "Canada" },
+  };
+}
+
+export function websiteJsonLd() {
+  const origin = siteOrigin();
+  return {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: SITE_NAME,
+    url: origin,
+    description: SITE_DESCRIPTION,
+    inLanguage: "en-CA",
+    potentialAction: {
+      "@type": "SearchAction",
+      target: `${origin}/search?q={search_term_string}`,
+      "query-input": "required name=search_term_string",
     },
-    geo: neighborhood.latitude && neighborhood.longitude ? {
-      '@type': 'GeoCoordinates',
-      latitude: neighborhood.latitude,
-      longitude: neighborhood.longitude
-    } : undefined,
-    aggregateRating: reviewCount > 0 ? {
-      '@type': 'AggregateRating',
-      ratingValue: averageRating.toFixed(1),
-      bestRating: '5',
-      worstRating: '1',
-      ratingCount: reviewCount
-    } : undefined,
-    review: reviews.map(review => ({
-      '@type': 'Review',
-      author: {
-        '@type': 'Person',
-        name: review.is_anonymous ? 'Anonymous User' : (review.display_name || 'User')
-      },
-      datePublished: review.created_at,
-      reviewRating: {
-        '@type': 'Rating',
-        ratingValue: ((review.safety + review.cleanliness + review.noise + review.community + review.transit + review.amenities) / 6).toFixed(1),
-        bestRating: '5',
-        worstRating: '1'
-      },
-      reviewBody: review.comment || ''
-    })).filter(r => r.reviewBody)
-  }
+  };
 }
 
-/**
- * Generate JSON-LD structured data for buildings
- */
-export function generateBuildingStructuredData(building: any, reviews: any[] = []) {
-  const reviewCount = reviews.length || building.total_reviews || 0
-  const averageRating = building.average_rating || 0
+function schemaTypeForProperty(property: Property) {
+  if (property.property_type === "house") return "House";
+  if (
+    property.property_type === "townhouse" ||
+    property.property_type === "duplex" ||
+    property.property_type === "triplex" ||
+    property.property_type === "fourplex"
+  ) {
+    return "Residence";
+  }
+  return "ApartmentComplex";
+}
 
-  return {
-    '@context': 'https://schema.org',
-    '@type': 'Residence',
-    name: building.name,
+export function propertyJsonLd(input: {
+  property: Property;
+  reviewCount: number;
+  rating: number | null;
+  reviews: Array<{
+    id: string;
+    review_title: string;
+    review_body: string;
+    overall_rating: number;
+    author_display_name?: string | null;
+    published_at?: string | null;
+    renter_status: string;
+  }>;
+}) {
+  const { property, reviewCount, rating, reviews } = input;
+  const origin = siteOrigin();
+  const url = `${origin}${propertyCanonicalPath(property)}`;
+  const name = propertyDisplayName(property);
+  const type = schemaTypeForProperty(property);
+  const json: Record<string, unknown> = {
+    "@context": "https://schema.org",
+    "@type": type,
+    name,
+    url,
+    description: propertyDescription({ property, reviewCount, rating }),
     address: {
-      '@type': 'PostalAddress',
-      streetAddress: building.address,
-      addressLocality: building.city,
-      addressRegion: building.province,
-      addressCountry: 'CA'
+      "@type": "PostalAddress",
+      streetAddress: property.address_line_1,
+      addressLocality: property.city,
+      addressRegion: property.province,
+      postalCode: property.postal_code ?? undefined,
+      addressCountry: "CA",
     },
-    geo: building.latitude && building.longitude ? {
-      '@type': 'GeoCoordinates',
-      latitude: building.latitude,
-      longitude: building.longitude
-    } : undefined,
-    aggregateRating: reviewCount > 0 ? {
-      '@type': 'AggregateRating',
-      ratingValue: averageRating.toFixed(1),
-      bestRating: '5',
-      worstRating: '1',
-      ratingCount: reviewCount
-    } : undefined,
-    review: reviews.map(review => ({
-      '@type': 'Review',
-      author: {
-        '@type': 'Person',
-        name: review.is_anonymous ? 'Anonymous User' : (review.display_name || 'User')
-      },
-      datePublished: review.created_at,
-      reviewRating: {
-        '@type': 'Rating',
-        ratingValue: ((review.management + review.cleanliness + review.maintenance + review.rent_value + review.noise + review.amenities) / 6).toFixed(1),
-        bestRating: '5',
-        worstRating: '1'
-      },
-      reviewBody: review.comment || ''
-    })).filter(r => r.reviewBody)
+  };
+  if (property.property_type) {
+    json.additionalType = PROPERTY_TYPE_LABELS[property.property_type];
   }
-}
-
-/**
- * Generate dynamic page title for neighborhoods
- */
-export function generateNeighborhoodTitle(name: string, city: string, province: string, rating?: number): string {
-  const ratingText = rating ? ` - ${rating.toFixed(1)} ⭐` : ''
-  return `${name}, ${city} Reviews & Ratings${ratingText} | LivRank`
-}
-
-/**
- * Generate dynamic meta description for neighborhoods
- */
-export function generateNeighborhoodDescription(
-  name: string, 
-  city: string, 
-  province: string, 
-  rating?: number,
-  reviewCount?: number
-): string {
-  const reviews = reviewCount ? ` Read ${reviewCount} verified ${reviewCount === 1 ? 'review' : 'reviews'}` : ''
-  const ratingText = rating ? ` Rated ${rating.toFixed(1)}/5.0.` : ''
-  
-  return `${name} in ${city}, ${province} - Real resident reviews and ratings.${ratingText}${reviews} covering Safety, Cleanliness, Noise, Community, Transit Access, and Amenities. Find out if this is the perfect neighborhood for you.`
-}
-
-/**
- * Generate dynamic page title for buildings
- */
-export function generateBuildingTitle(name: string, city: string, rating?: number): string {
-  const ratingText = rating ? ` - ${rating.toFixed(1)} ⭐` : ''
-  return `${name} Reviews${ratingText} | Apartment & Condo Ratings in ${city} | LivRank`
-}
-
-/**
- * Generate dynamic meta description for buildings
- */
-export function generateBuildingDescription(
-  name: string,
-  address: string,
-  city: string,
-  province: string,
-  rating?: number,
-  reviewCount?: number
-): string {
-  const reviews = reviewCount ? ` See ${reviewCount} verified ${reviewCount === 1 ? 'review' : 'reviews'}` : ''
-  const ratingText = rating ? ` Average rating: ${rating.toFixed(1)}/5.0.` : ''
-  
-  return `${name} at ${address} in ${city}, ${province}.${ratingText}${reviews} about Management, Maintenance, Rent Value, Cleanliness, Noise, and Amenities. Real tenant reviews to help you make the right choice.`
-}
-
-/**
- * Generate keywords for SEO
- */
-export function generateKeywords(type: 'neighborhood' | 'building', name: string, city: string): string {
-  const base = [
-    `${name}`,
-    `${city}`,
-    `${name} ${city}`,
-    `${name} reviews`,
-    `${city} reviews`
-  ]
-
-  if (type === 'neighborhood') {
-    return [
-      ...base,
-      `${name} neighborhood`,
-      `${name} safety`,
-      `${city} neighborhoods`,
-      `best neighborhoods ${city}`,
-      `${name} transit`,
-      `${name} community`,
-      'neighborhood reviews',
-      'neighborhood ratings'
-    ].join(', ')
-  } else {
-    return [
-      ...base,
-      `${name} apartments`,
-      `${name} building`,
-      `${city} apartments`,
-      `${city} condos`,
-      `${name} rent`,
-      `${name} management`,
-      'apartment reviews',
-      'building ratings',
-      'condo reviews'
-    ].join(', ')
+  if (property.latitude != null && property.longitude != null) {
+    json.geo = {
+      "@type": "GeoCoordinates",
+      latitude: property.latitude,
+      longitude: property.longitude,
+    };
   }
-}
-
-/**
- * Generate Open Graph image URL
- * Falls back to a default if no image provided
- */
-export function generateOGImage(images: string[] | null | undefined): string {
-  if (images && images.length > 0) {
-    return images[0]
+  if (rating != null && reviewCount >= MIN_REVIEWS_FOR_RATING) {
+    json.aggregateRating = {
+      "@type": "AggregateRating",
+      ratingValue: rating,
+      reviewCount,
+      bestRating: 5,
+      worstRating: 1,
+    };
   }
-  // Default OG image - you can create a custom one later
-  return '/og-default.jpg'
-}
-
-/**
- * Generate JSON-LD structured data for landlords
- */
-export function generateLandlordStructuredData(landlord: any, reviews: any[] = []) {
-  const reviewCount = reviews.length || landlord.total_reviews || 0
-  const averageRating = landlord.average_rating || 0
-
-  return {
-    '@context': 'https://schema.org',
-    '@type': 'Organization',
-    name: landlord.name,
-    url: landlord.website || undefined,
-    telephone: landlord.phone || undefined,
-    aggregateRating: reviewCount > 0 ? {
-      '@type': 'AggregateRating',
-      ratingValue: averageRating.toFixed(1),
-      bestRating: '5',
-      worstRating: '1',
-      ratingCount: reviewCount
-    } : undefined,
-    review: reviews.map(review => ({
-      '@type': 'Review',
-      author: {
-        '@type': 'Person',
-        name: review.is_anonymous ? 'Anonymous User' : (review.display_name || 'User')
-      },
-      datePublished: review.created_at,
-      reviewRating: {
-        '@type': 'Rating',
-        ratingValue: ((review.management + review.cleanliness + review.maintenance + review.rent_value + review.noise + review.amenities) / 6).toFixed(1),
-        bestRating: '5',
-        worstRating: '1'
-      },
-      reviewBody: review.comment || ''
-    })).filter(r => r.reviewBody)
-  }
-}
-
-/**
- * Generate dynamic page title for landlords
- */
-export function generateLandlordTitle(name: string, rating?: number): string {
-  const ratingText = rating ? ` - ${rating.toFixed(1)} ⭐` : ''
-  return `${name} Reviews${ratingText} | Landlord & Property Management Ratings | LivRank`
-}
-
-/**
- * Generate dynamic meta description for landlords
- */
-export function generateLandlordDescription(
-  name: string,
-  rating?: number,
-  reviewCount?: number,
-  buildingCount?: number
-): string {
-  const reviews = reviewCount ? ` Read ${reviewCount} verified ${reviewCount === 1 ? 'review' : 'reviews'}` : ''
-  const ratingText = rating ? ` Rated ${rating.toFixed(1)}/5.0.` : ''
-  const buildings = buildingCount ? ` Manages ${buildingCount} ${buildingCount === 1 ? 'building' : 'buildings'}.` : ''
-  
-  return `${name} landlord and property management reviews.${ratingText}${reviews}${buildings} See what real tenants say about responsiveness, maintenance, rent value, and more. Make informed decisions with LivRank.`
-}
-
-/**
- * Generate JSON-LD structured data for discussion threads (Reddit-style)
- */
-export function generateDiscussionStructuredData(discussion: any, replies: any[] = []) {
-  return {
-    '@context': 'https://schema.org',
-    '@type': 'DiscussionForumPosting',
-    headline: discussion.topic,
-    text: discussion.body,
+  const reviewNodes = reviews.slice(0, 5).map((review) => ({
+    "@type": "Review",
+    name: review.review_title,
+    reviewBody: review.review_body,
+    datePublished: review.published_at ?? undefined,
     author: {
-      '@type': 'Person',
-      name: discussion.is_anonymous ? 'Anonymous User' : (discussion.display_name || 'User')
+      "@type": "Person",
+      name: review.author_display_name?.trim() || (review.renter_status === "former" ? "Former renter" : "Current renter"),
     },
-    datePublished: discussion.created_at,
-    dateModified: discussion.updated_at,
-    commentCount: replies.length,
-    comment: replies.map(reply => ({
-      '@type': 'Comment',
-      text: reply.body,
-      author: {
-        '@type': 'Person',
-        name: reply.is_anonymous ? 'Anonymous User' : (reply.display_name || 'User')
-      },
-      datePublished: reply.created_at
-    })),
-    interactionStatistic: {
-      '@type': 'InteractionCounter',
-      interactionType: 'https://schema.org/LikeAction',
-      userInteractionCount: discussion.upvotes || 0
-    }
-  }
+    reviewRating: {
+      "@type": "Rating",
+      ratingValue: review.overall_rating,
+      bestRating: 5,
+      worstRating: 1,
+    },
+  }));
+  if (reviewNodes.length) json.review = reviewNodes;
+  return json;
 }
 
+export function breadcrumbJsonLd(items: { name: string; path: string }[]) {
+  const origin = siteOrigin();
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: items.map((item, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      name: item.name,
+      item: `${origin}${item.path}`,
+    })),
+  };
+}
+
+export function rootMetadata(): Metadata {
+  const origin = siteOrigin();
+  return {
+    metadataBase: new URL(origin),
+    applicationName: SITE_NAME,
+    title: {
+      default: `${SITE_NAME} — ${SITE_TAGLINE}`,
+      template: `%s | ${SITE_NAME}`,
+    },
+    description: SITE_DESCRIPTION,
+    keywords: [
+      "rental reviews Canada",
+      "apartment reviews",
+      "renter-reported rent",
+      "building reviews",
+    ],
+    authors: [{ name: SITE_NAME, url: origin }],
+    creator: SITE_NAME,
+    publisher: SITE_NAME,
+    formatDetection: { email: false, address: false, telephone: false },
+    alternates: { canonical: "/" },
+    openGraph: openGraphShare(`${SITE_NAME} — ${SITE_TAGLINE}`, SITE_DESCRIPTION, "/", {
+      type: "website",
+    }),
+    twitter: {
+      card: "summary_large_image",
+      title: `${SITE_NAME} — ${SITE_TAGLINE}`,
+      description: SITE_DESCRIPTION,
+    },
+    robots: {
+      index: true,
+      follow: true,
+      googleBot: {
+        index: true,
+        follow: true,
+        "max-image-preview": "large",
+        "max-snippet": -1,
+        "max-video-preview": -1,
+      },
+    },
+    category: "Real Estate",
+  };
+}
+
+export function pageMetadata(
+  title: string,
+  description: string,
+  path: string,
+  extra?: Pick<Metadata, "robots">,
+): Metadata {
+  const ogTitle = `${title} | ${SITE_NAME}`;
+  return {
+    title,
+    description,
+    alternates: { canonical: path },
+    openGraph: openGraphShare(ogTitle, description, path),
+    twitter: {
+      card: "summary_large_image",
+      title: ogTitle,
+      description,
+    },
+    ...extra,
+  };
+}
+
+export function visibleRating(summary: Pick<RatingSummary, "overall" | "reviewCount">) {
+  if (summary.overall == null || summary.reviewCount < MIN_REVIEWS_FOR_RATING) return null;
+  return summary.overall;
+}
