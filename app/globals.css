@@ -1,0 +1,191 @@
+@import "tailwindcss";
+
+:root {
+  --paper: #0a0a0a;
+  --ink: #f5f5f5;
+  --mute: #8a8a8a;
+  --rule: #2a2a2a;
+  --surface: #141414;
+  --accent: #f5f5f5;
+  --accent-hover: #ffffff;
+  --accent-soft: #1a1a1a;
+  --star: #c4a35a;
+  --star-dim: #3a3428;
+  --score-good: var(--star);
+  --score-warn: #8a8a8a;
+  --destructive: #a85a5a;
+
+  --background: var(--paper);
+  --foreground: var(--ink);
+  --card: var(--surface);
+  --card-foreground: var(--ink);
+  --popover: var(--surface);
+  --popover-foreground: var(--ink);
+  --primary: var(--accent);
+  --primary-foreground: #0a0a0a;
+  --secondary: #1a1a1a;
+  --secondary-foreground: var(--ink);
+  --muted: #1a1a1a;
+  --muted-foreground: var(--mute);
+  --accent-foreground: var(--ink);
+  --border: var(--rule);
+  --input: #2a2a2a;
+  --ring: #f5f5f5;
+  --radius: 0.25rem;
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-ink: var(--ink);
+  --color-mute: var(--mute);
+  --color-rule: var(--rule);
+  --color-surface: var(--surface);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-star: var(--star);
+  --color-star-dim: var(--star-dim);
+  --color-score-good: var(--score-good);
+  --color-score-warn: var(--score-warn);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: 0.125rem;
+  --radius-md: 0.25rem;
+  --radius-lg: 0.25rem;
+  --radius-xl: 0.375rem;
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-display: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  line-height: 1.6;
+}
+
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+
+p {
+  text-wrap: pretty;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+a,
+button {
+  transition: color 150ms ease, background-color 150ms ease, border-color 150ms ease;
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+@layer utilities {
+  .page-wrap {
+    margin-inline: auto;
+    width: 100%;
+    max-width: 48rem;
+    padding-inline: 1rem;
+  }
+
+  .dossier-wrap {
+    margin-inline: auto;
+    width: 100%;
+    max-width: 82.5rem;
+    padding-inline: 1rem;
+  }
+
+  @media (min-width: 768px) {
+    .dossier-wrap {
+      padding-inline: 2rem;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .dossier-wrap {
+      padding-inline: 3rem;
+    }
+  }
+
+  .kicker {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--mute);
+  }
+
+  .display {
+    font-family: var(--font-display);
+    font-weight: 700;
+    line-height: 1.08;
+    letter-spacing: -0.03em;
+    text-wrap: balance;
+  }
+
+  .figure {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer base {
+  input:where(
+      :not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="submit"]):not([type="button"]):not(
+          [type="file"]
+        )
+    ),
+  textarea,
+  select {
+    border-radius: 0.25rem;
+    border: 1px solid var(--rule);
+    background: var(--surface);
+    color: var(--ink);
+  }
+
+  .maplibregl-popup-content {
+    @apply bg-transparent! shadow-none! p-0! rounded-none!;
+  }
+  .maplibregl-popup-tip {
+    @apply hidden!;
+  }
+  .maplibregl-ctrl-attrib {
+    @apply bg-surface! text-mute! border-rule! rounded-md! border!;
+  }
+  .maplibregl-ctrl-attrib a {
+    @apply text-mute!;
+  }
+  .maplibregl-ctrl-attrib a:hover {
+    @apply text-ink!;
+  }
+  .maplibregl-ctrl-attrib-button {
+    @apply bg-transparent!;
+  }
+}
