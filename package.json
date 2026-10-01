@@ -2,6 +2,9 @@
   "name": "liv",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20.9.0"
+  },
   "scripts": {
     "dev": "NODE_OPTIONS='--max-http-header-size=65536' next dev",
     "build": "next build",
