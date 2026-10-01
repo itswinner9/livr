@@ -2,6 +2,7 @@ import { HomeDossier } from "@/components/home-dossier";
 import { JsonLd } from "@/components/json-ld";
 import { listingHref } from "@/components/listing-ui";
 import { listingFiltersFrom, loadListingMarketplace } from "@/lib/listings/page-data";
+import { hasSupabaseConfig } from "@/lib/env";
 import { SITE_NAME, SITE_TAGLINE, pageMetadata, websiteJsonLd } from "@/lib/seo";
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
@@ -29,7 +30,13 @@ export default async function HomePage({
   return (
     <>
       <JsonLd data={websiteJsonLd()} />
-      <HomeDossier filters={data.filters} facets={data.facets} listings={data.listings} token={data.token} />
+      <HomeDossier
+        filters={data.filters}
+        facets={data.facets}
+        listings={data.listings}
+        token={data.token}
+        databaseReady={hasSupabaseConfig()}
+      />
     </>
   );
 }

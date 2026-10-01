@@ -47,6 +47,10 @@ export type ListingFilters = {
   hasRent?: boolean;
 };
 
+function logQueryError(where: string, error: { message: string } | null | undefined) {
+  if (error) console.error(`[livrank] ${where}: ${error.message}`);
+}
+
 function matchesListingFilters(p: Property, filters: ListingFilters) {
   if (filters.city && p.city !== filters.city) return false;
   if (filters.province && p.province !== filters.province) return false;
@@ -63,11 +67,12 @@ export async function searchProperties(
   const parsed = parseSearchQuery(query);
   const supabase = await createServerSupabase();
   if (!supabase) return [];
-  const { data } = await supabase.rpc("search_properties", {
+  const { data, error } = await supabase.rpc("search_properties", {
     p_query: parsed.normalized,
     p_limit: 25,
     p_province: filters.province ?? null,
   });
+  logQueryError("search_properties", error);
   return ((data ?? []) as Record<string, unknown>[])
     .map(mapProperty)
     .filter((p) => matchesListingFilters(p, filters));
@@ -82,10 +87,11 @@ export async function browseListings(filters: ListingFilters = {}, limit = 24): 
   if (filters.propertyType) q = q.eq("property_type", filters.propertyType);
   if (filters.hasReviews) q = q.gt("review_count", 0);
   if (filters.hasRent) q = q.gt("rent_report_count", 0);
-  const { data } = await q
+  const { data, error } = await q
     .order("last_review_date", { ascending: false, nullsFirst: false })
     .order("review_count", { ascending: false })
     .limit(limit);
+  logQueryError("browseListings", error);
   return ((data ?? []) as Record<string, unknown>[]).map(mapProperty);
 }
 
@@ -121,11 +127,12 @@ export const getPropertyById = cache(async function getPropertyById(id: string):
   const supabase = await createServerSupabase();
   if (!supabase) return null;
   const column = isUuid(id) ? "id" : "slug";
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("public_properties")
     .select("*")
     .eq(column, id)
     .maybeSingle();
+  logQueryError("getPropertyById", error);
   if (data) return mapProperty(data);
   if (column === "id") return null;
   const { data: redirect } = await supabase
@@ -172,12 +179,13 @@ export async function getPropertyBySlug(slug: string) {
 export async function listPublicProperties(limit = 8): Promise<Property[]> {
   const supabase = await createServerSupabase();
   if (!supabase) return [];
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("public_properties")
     .select("*")
     .order("last_review_date", { ascending: false, nullsFirst: false })
     .order("review_count", { ascending: false })
     .limit(limit);
+  logQueryError("listPublicProperties", error);
   return ((data ?? []) as Record<string, unknown>[]).map(mapProperty);
 }
 

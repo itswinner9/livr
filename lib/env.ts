@@ -1,39 +1,50 @@
+function envValue(name: string) {
+  const value = process.env[name];
+  return typeof value === "string" && value.trim() ? value.trim() : "";
+}
+
+/** Server can use runtime Netlify env; client still needs NEXT_PUBLIC_* at build. */
+export function supabaseUrl() {
+  return envValue("SUPABASE_URL") || envValue("NEXT_PUBLIC_SUPABASE_URL");
+}
+
+export function supabaseAnonKey() {
+  return envValue("SUPABASE_ANON_KEY") || envValue("NEXT_PUBLIC_SUPABASE_ANON_KEY");
+}
+
 export function hasSupabaseConfig() {
-  return Boolean(
-    process.env.NEXT_PUBLIC_SUPABASE_URL &&
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-  );
+  return Boolean(supabaseUrl() && supabaseAnonKey());
+}
+
+export function serviceRoleKey() {
+  return envValue("SUPABASE_SERVICE_ROLE_KEY");
 }
 
 export function hasServiceRole() {
-  return Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY);
+  return Boolean(serviceRoleKey());
 }
 
 export function hasOpenRouter() {
-  return Boolean(process.env.OPENROUTER_API_KEY);
+  return Boolean(envValue("OPENROUTER_API_KEY"));
 }
 
 export function hasStripe() {
-  return Boolean(
-    process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET,
-  );
+  return Boolean(envValue("STRIPE_SECRET_KEY") && envValue("STRIPE_WEBHOOK_SECRET"));
 }
 
 export function hasResend() {
-  return Boolean(process.env.RESEND_API_KEY);
+  return Boolean(envValue("RESEND_API_KEY"));
 }
 
 export function appUrl() {
-  return process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  return envValue("NEXT_PUBLIC_APP_URL") || "http://localhost:3000";
 }
 
 export function aiModels() {
   return {
-    default: process.env.OPENROUTER_DEFAULT_MODEL || "openai/gpt-4o-mini",
-    fast: process.env.OPENROUTER_FAST_MODEL || "openai/gpt-4o-mini",
-    reasoning: process.env.OPENROUTER_REASONING_MODEL || "openai/gpt-4o",
-    embedding:
-      process.env.OPENROUTER_EMBEDDING_MODEL ||
-      "openai/text-embedding-3-small",
+    default: envValue("OPENROUTER_DEFAULT_MODEL") || "openai/gpt-4o-mini",
+    fast: envValue("OPENROUTER_FAST_MODEL") || "openai/gpt-4o-mini",
+    reasoning: envValue("OPENROUTER_REASONING_MODEL") || "openai/gpt-4o",
+    embedding: envValue("OPENROUTER_EMBEDDING_MODEL") || "openai/text-embedding-3-small",
   };
 }
