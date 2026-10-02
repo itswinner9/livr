@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
-import { hasStripe } from "@/lib/env";
+import { appUrl, hasStripe } from "@/lib/env";
 import { getSessionUser } from "@/lib/auth/session";
 
 export async function POST() {
@@ -20,8 +20,8 @@ export async function POST() {
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
     line_items: [{ price, quantity: 1 }],
-    success_url: `${process.env.NEXT_PUBLIC_APP_URL}/account?checkout=success`,
-    cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/pricing`,
+    success_url: `${appUrl()}/account?checkout=success`,
+    cancel_url: `${appUrl()}/pricing`,
     client_reference_id: user.id,
     metadata: { userId: user.id },
   });
