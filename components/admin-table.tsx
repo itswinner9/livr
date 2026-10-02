@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { moderateContent, type ModerateState } from "@/lib/actions/admin";
 import { ConfirmDeleteButton } from "@/components/confirm-delete";
+import { Button } from "@/components/ui/button";
 
 const DEFAULT_ACTIONS = ["approve", "reject", "hide"] as const;
 
@@ -45,13 +46,9 @@ export function ModerationButtons({
             <input type="hidden" name="targetType" value={targetType} />
             <input type="hidden" name="targetId" value={targetId} />
             <input type="hidden" name="action" value={moderationAction} />
-            <button
-              className="rounded border px-2 py-1 text-xs capitalize disabled:opacity-50"
-              type="submit"
-              disabled={pending}
-            >
+            <Button type="submit" variant="outline" size="sm" disabled={pending} className="capitalize">
               {pending ? "Saving…" : actionLabel(moderationAction)}
-            </button>
+            </Button>
           </form>
         ))}
         {canDelete ? (

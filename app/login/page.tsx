@@ -23,7 +23,9 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         lede={
           next?.startsWith("/rate") || next?.startsWith("/review")
             ? "Log in to rate this place. We'll bring you right back."
-            : "Read buildings on file, then add your own experience."
+            : next?.startsWith("/admin")
+              ? "Staff only. We'll send you to admin after you log in."
+              : "Read buildings on file, then add your own experience."
         }
       />
       <LoginForm next={next} />

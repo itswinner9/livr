@@ -61,6 +61,7 @@ beforeAll(async () => {
   await db.exec(read("migrations/20260926000400_property_units.sql"));
   await db.exec(read("migrations/20260926000500_review_hold_flags.sql"));
   await db.exec(read("migrations/20261001000000_review_replies.sql"));
+  await db.exec(read("migrations/20261001233000_staff_profile_counts.sql"));
   await db.exec(read("seed.sql"));
 }, 120_000);
 
@@ -90,14 +91,17 @@ describe("schema + seed", () => {
     expect(r.n).toBe(0);
   });
 
-  it("aggregates public topics from published reviews", async () => {
-    const r = await as("anon", null, () =>
-      one<{ mentions: number }>(
-        "select mentions from public_property_topics where property_id = $1 and topic = 'maintenance'",
-        [P1],
-      ),
+  it("lets staff count every profile and blocks renters", async () => {
+    const staff = await as("authenticated", ADMIN, () =>
+      one<{ total: number; renters: number; managers: number; staff: number }>("select * from staff_profile_counts()"),
     );
-    expect(r.mentions).toBe(2);
+    expect(staff.total).toBe(7);
+    expect(staff.staff).toBe(2);
+    expect(staff.managers).toBe(1);
+    const renterView = await as("authenticated", RENTER1, () =>
+      one<{ n: number }>("select count(*)::int n from profiles"),
+    );
+    expect(renterView.n).toBe(1);
   });
 });
 

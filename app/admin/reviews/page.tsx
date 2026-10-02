@@ -1,5 +1,6 @@
-import { getStaffClient } from "@/lib/admin/data";
+import { getAdminCounts, getStaffClient } from "@/lib/admin/data";
 import { ModerationButtons } from "@/components/admin-table";
+import { EmptyState } from "@/components/empty-state";
 import { holdReasonsFromFlags, labelHoldReason } from "@/lib/moderation/review-gate";
 import Link from "next/link";
 
@@ -46,7 +47,9 @@ function first<T>(value: T | T[] | null | undefined): T | null {
 }
 
 function tabClass(active: boolean) {
-  return `rounded-md px-3 py-1.5 ${active ? "bg-accent text-paper" : "border bg-surface"}`;
+  return active
+    ? "inline-flex min-h-11 items-center rounded-md border border-ink bg-surface px-3.5 text-sm font-semibold text-ink"
+    : "inline-flex min-h-11 items-center rounded-md px-3.5 text-sm font-semibold text-mute hover:bg-muted hover:text-ink";
 }
 
 export default async function AdminReviewsPage({
@@ -57,7 +60,7 @@ export default async function AdminReviewsPage({
   const { tab } = await searchParams;
   const published = tab === "published";
   const replies = tab === "replies";
-  const client = await getStaffClient();
+  const [counts, client] = await Promise.all([getAdminCounts(), getStaffClient()]);
 
   const reviewQuery = client && !replies
     ? published
@@ -98,18 +101,18 @@ export default async function AdminReviewsPage({
 
   return (
     <div>
-      <h1 className="text-3xl font-semibold text-ink">
+      <h1 className="display text-3xl text-ink">
         {replies ? "Replies" : published ? "Recently published" : "Needs review"}
       </h1>
-      <div className="mt-4 flex flex-wrap gap-2 text-sm">
+      <div className="mt-4 flex flex-wrap gap-1">
         <Link href="/admin/reviews" className={tabClass(!published && !replies)}>
-          Needs review
+          Needs review{counts.pendingReviews ? ` · ${counts.pendingReviews}` : ""}
         </Link>
         <Link href="/admin/reviews?tab=published" className={tabClass(published)}>
           Recently published
         </Link>
         <Link href="/admin/reviews?tab=replies" className={tabClass(replies)}>
-          Replies
+          Replies{counts.pendingReplies ? ` · ${counts.pendingReplies}` : ""}
         </Link>
       </div>
       {replies ? (
@@ -122,7 +125,7 @@ export default async function AdminReviewsPage({
               : "Unknown address";
             const reasons = holdReasonsFromFlags(reply.heuristic_flags);
             return (
-              <li key={reply.id} className="rounded-md border bg-surface p-4">
+              <li key={reply.id} className="rounded-md border border-rule bg-surface p-4">
                 <p className="font-medium">{parent?.review_title ?? "Review reply"}</p>
                 <p className="mt-1 text-sm text-mute">{address}</p>
                 {parent?.property_id ? (
@@ -138,7 +141,7 @@ export default async function AdminReviewsPage({
                     {reasons.map((reason) => (
                       <li
                         key={reason}
-                        className="rounded-sm bg-accent/10 px-2.5 py-0.5 text-xs font-medium text-accent"
+                        className="rounded-sm bg-muted px-2.5 py-0.5 text-xs font-medium text-mute"
                       >
                         {labelHoldReason(reason)}
                       </li>
@@ -156,7 +159,9 @@ export default async function AdminReviewsPage({
             );
           })}
           {pendingReplies.length === 0 ? (
-            <li className="rounded-md border bg-surface p-4 text-sm text-mute">No pending replies.</li>
+            <li className="rounded-md border border-rule bg-surface px-4">
+              <EmptyState title="No pending replies." />
+            </li>
           ) : null}
         </ul>
       ) : (
@@ -169,7 +174,7 @@ export default async function AdminReviewsPage({
               : "Unknown address";
             const reasons = holdReasonsFromFlags(review.heuristic_flags);
             return (
-              <li key={review.id} className="rounded-md border bg-surface p-4">
+              <li key={review.id} className="rounded-md border border-rule bg-surface p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="font-medium">{review.review_title}</p>
@@ -191,7 +196,7 @@ export default async function AdminReviewsPage({
                     {reasons.map((reason) => (
                       <li
                         key={reason}
-                        className="rounded-sm bg-accent/10 px-2.5 py-0.5 text-xs font-medium text-accent"
+                        className="rounded-sm bg-muted px-2.5 py-0.5 text-xs font-medium text-mute"
                       >
                         {labelHoldReason(reason)}
                       </li>
@@ -209,8 +214,8 @@ export default async function AdminReviewsPage({
             );
           })}
           {reviews.length === 0 ? (
-            <li className="rounded-md border bg-surface p-4 text-sm text-mute">
-              {published ? "No recently published reviews." : "No pending reviews."}
+            <li className="rounded-md border border-rule bg-surface px-4">
+              <EmptyState title={published ? "No recently published reviews." : "No pending reviews."} />
             </li>
           ) : null}
         </ul>

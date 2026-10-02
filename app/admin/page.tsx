@@ -1,46 +1,55 @@
 import { getAdminCounts } from "@/lib/admin/data";
+import { AdminStatGrid } from "@/components/admin-stat-grid";
 import Link from "next/link";
 
 export default async function AdminHome() {
   const counts = await getAdminCounts();
-  const cards = [
-    {
-      href: "/admin/reviews",
-      label: counts.pendingReviews === 1 ? "review waiting" : "reviews waiting",
-      value: counts.pendingReviews,
-    },
-    {
-      href: "/admin/rent-reports",
-      label: counts.pendingRent === 1 ? "rent report waiting" : "rent reports waiting",
-      value: counts.pendingRent,
-    },
-    {
-      href: "/admin/flags",
-      label: counts.flags === 1 ? "open flag" : "open flags",
-      value: counts.flags,
-    },
-    {
-      href: "/admin/reviews?tab=published",
-      label: "published reviews",
-      value: counts.publishedReviews,
-    },
-    { href: "/admin/properties", label: "properties", value: counts.properties },
-    { href: "/admin/users", label: "users", value: counts.users },
-  ];
-
   return (
     <div>
-      <h1 className="text-3xl font-semibold text-ink">Admin</h1>
-      <ul className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {cards.map((card) => (
-          <li key={card.href + card.label}>
-            <Link href={card.href} className="block border-t border-rule pt-3 hover:text-accent">
-              <p className="text-2xl font-semibold">{card.value}</p>
-              <p className="text-sm text-mute">{card.label}</p>
-            </Link>
-          </li>
-        ))}
-      </ul>
+      <h1 className="display text-3xl text-ink">Admin</h1>
+      <p className="mt-2 text-sm text-mute">Queue first. Totals are the live LivRank database.</p>
+
+      <h2 className="mt-8 text-sm font-semibold uppercase tracking-wide text-mute">Users</h2>
+      <AdminStatGrid
+        items={[
+          {
+            href: "/admin/users",
+            label: "Total users",
+            value: counts.users,
+            featured: true,
+            hint: counts.users === 1 ? "1 account on file" : `${counts.users} accounts on file`,
+          },
+          { href: "/admin/users", label: "Renters", value: counts.renters },
+          { href: "/admin/users", label: "Managers", value: counts.managers },
+          { href: "/admin/users", label: "Staff", value: counts.staff },
+        ]}
+      />
+      <p className="mt-3 text-sm text-mute">
+        <Link href="/admin/users" className="font-semibold text-accent hover:text-accent-hover">
+          Open the user list
+        </Link>
+        {" · "}
+        Emails stay off this dashboard.
+      </p>
+
+      <h2 className="mt-8 text-sm font-semibold uppercase tracking-wide text-mute">Needs attention</h2>
+      <AdminStatGrid
+        items={[
+          { href: "/admin/reviews", label: "Reviews waiting", value: counts.pendingReviews },
+          { href: "/admin/reviews?tab=replies", label: "Replies waiting", value: counts.pendingReplies },
+          { href: "/admin/rent-reports", label: "Rent waiting", value: counts.pendingRent },
+          { href: "/admin/flags", label: "Open flags", value: counts.flags },
+        ]}
+      />
+
+      <h2 className="mt-8 text-sm font-semibold uppercase tracking-wide text-mute">On file</h2>
+      <AdminStatGrid
+        items={[
+          { href: "/admin/properties", label: "Properties", value: counts.properties },
+          { href: "/admin/reviews?tab=published", label: "Published reviews", value: counts.publishedReviews },
+          { href: "/admin/rent-reports", label: "Published rent", value: counts.rentReports },
+        ]}
+      />
     </div>
   );
 }

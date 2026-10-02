@@ -34,7 +34,7 @@ export function AdminPropertyActions({
             <button
               type="submit"
               disabled={restorePending}
-              className="rounded border border-rule px-2 py-1 text-xs font-semibold text-ink hover:bg-muted disabled:opacity-50"
+              className="inline-flex min-h-11 items-center rounded-md border border-rule bg-surface px-3 text-sm font-semibold text-ink hover:bg-muted disabled:opacity-50"
             >
               {restorePending ? "Saving…" : "Restore"}
             </button>
@@ -45,7 +45,7 @@ export function AdminPropertyActions({
             <button
               type="submit"
               disabled={hidePending}
-              className="rounded border border-rule px-2 py-1 text-xs font-semibold text-ink hover:bg-muted disabled:opacity-50"
+              className="inline-flex min-h-11 items-center rounded-md border border-rule bg-surface px-3 text-sm font-semibold text-ink hover:bg-muted disabled:opacity-50"
             >
               {hidePending ? "Saving…" : "Remove"}
             </button>

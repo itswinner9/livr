@@ -1,3 +1,4 @@
+import { AccountShell } from "@/components/account-shell";
 import { noIndexFollow } from "@/lib/seo";
 import type { Metadata } from "next";
 
@@ -7,5 +8,5 @@ export const metadata: Metadata = {
 };
 
 export default function AccountLayout({ children }: { children: React.ReactNode }) {
-  return children;
+  return <AccountShell>{children}</AccountShell>;
 }
