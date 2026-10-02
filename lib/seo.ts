@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { PROVINCE_NAMES, type ProvinceCode } from "@/lib/address/normalize";
+import { appUrl } from "@/lib/env";
 import { MIN_REVIEWS_FOR_RATING } from "@/lib/ratings/aggregate";
 import { PROPERTY_TYPE_LABELS, type Property, type RatingSummary } from "@/types/property";
 
@@ -32,7 +33,7 @@ export const HOME_FAQS: { question: string; answer: string }[] = [
 ];
 
 export function siteOrigin() {
-  return process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  return appUrl();
 }
 
 export function jsonLdString(data: unknown) {

@@ -2,6 +2,7 @@
 
 import { getSessionUser } from "@/lib/auth/session";
 import { rateLimit } from "@/lib/rate-limit";
+import { appUrl } from "@/lib/env";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { safeNextPath } from "@/lib/safe-redirect";
@@ -45,7 +46,7 @@ export async function resetPassword(formData: FormData) {
   const supabase = await createServerSupabase();
   if (!supabase) return { error: "Authentication is not configured yet." };
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/login`,
+    redirectTo: `${appUrl()}/login`,
   });
   if (error) return { error: "We couldn't send a reset email. Please try again." };
   return { ok: "If that email exists, a reset link is on its way." };

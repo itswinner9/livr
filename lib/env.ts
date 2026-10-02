@@ -36,8 +36,22 @@ export function hasResend() {
   return Boolean(envValue("RESEND_API_KEY"));
 }
 
+function isLocalAppUrl(value: string) {
+  try {
+    const host = new URL(value).hostname.toLowerCase();
+    return host === "localhost" || host === "127.0.0.1" || host === "::1";
+  } catch {
+    return true;
+  }
+}
+
 export function appUrl() {
-  return envValue("NEXT_PUBLIC_APP_URL") || "http://localhost:3000";
+  const configured = envValue("NEXT_PUBLIC_APP_URL").replace(/\/$/, "");
+  if (process.env.NODE_ENV === "production") {
+    if (configured && !isLocalAppUrl(configured)) return configured;
+    return "https://livrank.ca";
+  }
+  return configured || "http://localhost:3000";
 }
 
 export function aiModels() {
