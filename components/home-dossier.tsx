@@ -9,6 +9,7 @@ import {
   type ListingFacets,
   type ListingFiltersState,
 } from "@/components/listing-ui";
+import { HOME_FAQS } from "@/lib/seo";
 
 export function HomeDossier({
   filters,
@@ -34,11 +35,11 @@ export function HomeDossier({
           <div className="max-w-3xl">
             <p className="text-sm font-semibold text-mute">Look up any Canadian address.</p>
             <h1 className="display mt-3 text-4xl text-ink sm:text-5xl lg:text-6xl lg:leading-[1.05]">
-              Know the building before you sign the lease.
+              Know before you move to your new home.
             </h1>
             <p className="mt-5 max-w-xl text-lg leading-relaxed text-mute">
-              Look up any Canadian address. If it&apos;s already on file, read the reviews. If it isn&apos;t, be the first
-              to rate it or report the rent you paid.
+              Read renter-reported reviews, ratings, and what people paid — before you sign. If the building isn&apos;t
+              on file yet, be the first to rate it.
             </p>
           </div>
 
@@ -56,6 +57,25 @@ export function HomeDossier({
               <ListingProvinceSelect action="/explore" province={filters.province} q={filters.q} city={filters.city} />
             </div>
           </div>
+
+          <dl className="mt-8 grid max-w-4xl grid-cols-1 gap-2 rounded-md border border-rule bg-surface p-2 sm:grid-cols-3">
+            <div className="rounded-md bg-muted px-3 py-3">
+              <dt className="text-xs font-medium text-mute">Reviews</dt>
+              <dd className="mt-1 text-sm font-semibold text-ink">From people who lived there</dd>
+            </div>
+            <div className="rounded-md bg-muted px-3 py-3">
+              <dt className="text-xs font-medium text-mute">Reported rent</dt>
+              <dd className="mt-1 text-sm font-semibold text-ink">What renters say they paid</dd>
+            </div>
+            <div className="rounded-md bg-muted px-3 py-3">
+              <dt className="text-xs font-medium text-mute">Compare</dt>
+              <dd className="mt-1 text-sm font-semibold text-ink">
+                <Link href="/compare" className="hover:text-accent">
+                  Buildings side by side
+                </Link>
+              </dd>
+            </div>
+          </dl>
 
           {facets.cityPlaces.length > 0 ? (
             <nav className="mt-4 flex max-w-4xl flex-wrap items-center gap-2" aria-label="Cities">
@@ -189,6 +209,25 @@ export function HomeDossier({
           </div>
         </section>
       ) : null}
+
+      <section className="bg-paper py-16 md:py-24" aria-labelledby="before-you-move">
+        <div className="dossier-wrap">
+          <div className="max-w-3xl">
+            <h2 id="before-you-move" className="text-3xl font-bold tracking-tight text-ink">
+              Before you move
+            </h2>
+            <p className="mt-2 text-sm text-mute">Plain answers. No official registry, no invented buildings.</p>
+            <dl className="mt-8 space-y-8">
+              {HOME_FAQS.map((faq) => (
+                <div key={faq.question}>
+                  <dt className="text-lg font-semibold text-ink">{faq.question}</dt>
+                  <dd className="mt-2 text-sm leading-7 text-mute">{faq.answer}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        </div>
+      </section>
 
       <section className="bg-paper pb-16">
         <div className="dossier-wrap">

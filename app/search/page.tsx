@@ -22,7 +22,7 @@ export async function generateMetadata({
   }
   return pageMetadata(
     "Search rental buildings in Canada",
-    "Look up a Canadian address and open the renter-reported building file. LivRank does not claim official rental history.",
+    "Know before you move. Look up a Canadian address and open the renter-reported building file before you sign. LivRank does not claim official rental history.",
     "/search",
   );
 }

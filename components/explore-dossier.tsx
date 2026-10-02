@@ -33,8 +33,8 @@ export function ExploreDossier({
           </h1>
           <p className="mt-3 max-w-xl text-base text-mute">
             {filters.city
-              ? `Renter-reported files in ${filters.city}. Ratings and rent figures are published renter reports, not official records.`
-              : "Browse by city, then open a file. Ratings and rent figures are published renter reports, not official records."}
+              ? `Know before you move. Renter-reported reviews and rent in ${filters.city}, not official records.`
+              : "Know before you move. Browse by city, then open a file. Ratings and rent figures are published renter reports, not official records."}
           </p>
           <div className="mt-6 max-w-xs">
             <ListingProvinceSelect

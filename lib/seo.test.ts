@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  HOME_FAQS,
   exploreCanonicalPath,
   exploreDescription,
   exploreTitle,
+  faqJsonLd,
   jsonLdString,
   propertyCanonicalPath,
   propertyDescription,
@@ -31,6 +33,7 @@ describe("seo helpers", () => {
     };
     expect(propertyDescription({ property, reviewCount: 3, rating: 3.3 })).toContain("3 renter reviews");
     expect(propertyDescription({ property, reviewCount: 3, rating: 3.3 })).toContain("average 3.3 out of 5");
+    expect(propertyDescription({ property, reviewCount: 3, rating: 3.3 })).toContain("before you move in");
     expect(
       propertyDescription({ property: { ...property, rent_report_count: 0 }, reviewCount: 0, rating: null }),
     ).toContain("No published ratings yet");
@@ -42,5 +45,15 @@ describe("seo helpers", () => {
   it("escapes HTML in JSON-LD", () => {
     expect(jsonLdString({ name: "A <script>alert(1)</script>" })).toContain("\\u003cscript>");
     expect(exploreDescription({ city: "Surrey", province: "BC" }, 2)).toContain("2 buildings on file");
+    expect(exploreDescription({ city: "Surrey", province: "BC" }, 2)).toContain("Know before you move");
+  });
+
+  it("describes FAQs without claiming official history", () => {
+    const json = faqJsonLd();
+    expect(json["@type"]).toBe("FAQPage");
+    expect(json.mainEntity).toHaveLength(HOME_FAQS.length);
+    const text = jsonLdString(json);
+    expect(text).toContain("before I move to my new home");
+    expect(text).toContain("does not claim official rental history");
   });
 });

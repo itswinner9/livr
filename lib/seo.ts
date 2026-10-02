@@ -4,9 +4,32 @@ import { MIN_REVIEWS_FOR_RATING } from "@/lib/ratings/aggregate";
 import { PROPERTY_TYPE_LABELS, type Property, type RatingSummary } from "@/types/property";
 
 export const SITE_NAME = "LivRank";
-export const SITE_TAGLINE = "Know the place before you rent it";
+export const SITE_TAGLINE = "Know before you move to your new home";
 export const SITE_DESCRIPTION =
-  "Read renter-reported reviews, ratings, and rent history for apartment buildings across Canada before you sign a lease. LivRank does not claim official rental history.";
+  "Know before you move to your new home. Look up any Canadian address and read renter-reported reviews, ratings, and rent before you sign a lease. LivRank does not claim official rental history.";
+
+export const HOME_FAQS: { question: string; answer: string }[] = [
+  {
+    question: "How do I know a rental before I move to my new home?",
+    answer:
+      "Look up any Canadian address on LivRank. If the building is already on file, you can read renter-reported reviews, ratings, and rent before you sign.",
+  },
+  {
+    question: "Does LivRank cover all of Canada?",
+    answer:
+      "Yes. Search any Canadian address. If it is not on file yet, you can be the first to write a review or report the rent you paid.",
+  },
+  {
+    question: "Are LivRank reviews official rental records?",
+    answer:
+      "No. Reviews and rent figures come from renters, not from a government registry or a landlord. LivRank does not claim official rental history.",
+  },
+  {
+    question: "What if the building is not on LivRank yet?",
+    answer:
+      "Add it. Write a review or report what you paid so the next person can know before they move.",
+  },
+];
 
 export function siteOrigin() {
   return process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
@@ -75,7 +98,7 @@ export function exploreDescription(
     buildingCount > 0
       ? `${buildingCount} ${buildingCount === 1 ? "building" : "buildings"} on file. `
       : "";
-  return `${count}Read renter-reported reviews and rent history for rental buildings in ${place}. LivRank does not claim official rental history.`;
+  return `${count}Know before you move. Read renter-reported reviews and rent for buildings in ${place} before you sign. LivRank does not claim official rental history.`;
 }
 
 export function propertyDescription(input: {
@@ -92,8 +115,10 @@ export function propertyDescription(input: {
     bits.push(`average ${rating.toFixed(1)} out of 5`);
   }
   if (property.rent_report_count > 0) bits.push("renter-reported rent on file");
-  const facts = bits.length ? `${bits.join(", ")}. ` : "No published ratings yet. ";
-  return `Renter-reported file for ${property.address_line_1} in ${property.city}, ${property.province}. ${facts}LivRank does not claim official rental history.`;
+  const facts = bits.length
+    ? `${bits.join(", ").replace(/^./, (letter) => letter.toUpperCase())}. `
+    : "No published ratings yet. ";
+  return `Renter-reported file for ${property.address_line_1} in ${property.city}, ${property.province}. ${facts}Read renter reports before you move in. LivRank does not claim official rental history.`;
 }
 
 export function openGraphShare(
@@ -121,6 +146,21 @@ export function organizationJsonLd() {
     url: origin,
     description: SITE_DESCRIPTION,
     areaServed: { "@type": "Country", name: "Canada" },
+  };
+}
+
+export function faqJsonLd(faqs: { question: string; answer: string }[] = HOME_FAQS) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: faqs.map((faq) => ({
+      "@type": "Question",
+      name: faq.question,
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: faq.answer,
+      },
+    })),
   };
 }
 
@@ -243,6 +283,7 @@ export function breadcrumbJsonLd(items: { name: string; path: string }[]) {
 
 export function rootMetadata(): Metadata {
   const origin = siteOrigin();
+  const googleVerification = process.env.GOOGLE_SITE_VERIFICATION?.trim();
   return {
     metadataBase: new URL(origin),
     applicationName: SITE_NAME,
@@ -252,10 +293,13 @@ export function rootMetadata(): Metadata {
     },
     description: SITE_DESCRIPTION,
     keywords: [
+      "know before you move",
+      "know before you rent",
+      "apartment reviews Canada",
       "rental reviews Canada",
-      "apartment reviews",
+      "rental building reviews",
       "renter-reported rent",
-      "building reviews",
+      "apartment reviews",
     ],
     authors: [{ name: SITE_NAME, url: origin }],
     creator: SITE_NAME,
@@ -270,6 +314,7 @@ export function rootMetadata(): Metadata {
       title: `${SITE_NAME} — ${SITE_TAGLINE}`,
       description: SITE_DESCRIPTION,
     },
+    ...(googleVerification ? { verification: { google: googleVerification } } : {}),
     robots: {
       index: true,
       follow: true,

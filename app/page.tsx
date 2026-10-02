@@ -3,16 +3,12 @@ import { JsonLd } from "@/components/json-ld";
 import { listingHref } from "@/components/listing-ui";
 import { listingFiltersFrom, loadListingMarketplace } from "@/lib/listings/page-data";
 import { hasSupabaseConfig } from "@/lib/env";
-import { SITE_NAME, SITE_TAGLINE, pageMetadata, websiteJsonLd } from "@/lib/seo";
+import { SITE_DESCRIPTION, SITE_NAME, SITE_TAGLINE, faqJsonLd, pageMetadata, websiteJsonLd } from "@/lib/seo";
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  ...pageMetadata(
-    `${SITE_NAME} — ${SITE_TAGLINE}`,
-    "Look up any Canadian address. If it is already on file, read the renter-reported reviews and rent. If it is not, be the first to rate it.",
-    "/",
-  ),
+  ...pageMetadata(`${SITE_NAME} — ${SITE_TAGLINE}`, SITE_DESCRIPTION, "/"),
   title: { absolute: `${SITE_NAME} — ${SITE_TAGLINE}` },
 };
 
@@ -30,6 +26,7 @@ export default async function HomePage({
   return (
     <>
       <JsonLd data={websiteJsonLd()} />
+      <JsonLd data={faqJsonLd()} />
       <HomeDossier
         filters={data.filters}
         facets={data.facets}

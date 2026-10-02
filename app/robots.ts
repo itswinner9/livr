@@ -15,6 +15,7 @@ export default function robots(): MetadataRoute.Robots {
           "/manager",
           "/login",
           "/signup",
+          "/auth",
           "/saved",
           "/rate",
           "/review/new",
