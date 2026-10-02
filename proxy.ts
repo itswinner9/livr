@@ -3,9 +3,13 @@ import { oauthCallbackForwardPath, publicRequestOrigin } from "@/lib/auth/oauth"
 import { updateSession } from "@/lib/supabase/proxy";
 
 export async function proxy(request: NextRequest) {
-  const forward = oauthCallbackForwardPath(request.nextUrl.pathname, request.nextUrl.searchParams);
+  const { pathname } = request.nextUrl;
+  const forward = oauthCallbackForwardPath(pathname, request.nextUrl.searchParams);
   if (forward) {
     return NextResponse.redirect(new URL(forward, `${publicRequestOrigin(request)}/`));
+  }
+  if (pathname === "/auth/callback" || pathname === "/auth/google") {
+    return NextResponse.next();
   }
   return updateSession(request);
 }

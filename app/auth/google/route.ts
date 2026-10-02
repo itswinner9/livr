@@ -1,13 +1,14 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { authReturnPath, googleCallbackUrl, publicRequestOrigin, type AuthIntent } from "@/lib/auth/oauth";
 import { checkRateLimit, clientIp } from "@/lib/rate-limit";
 import { safeNextPath } from "@/lib/safe-redirect";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { createRouteSupabase, redirectWithCookies } from "@/lib/supabase/route";
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const next = safeNextPath(searchParams.get("next"));
-  const intent: AuthIntent = searchParams.get("intent") === "signup" ? "signup" : "login";
+export const dynamic = "force-dynamic";
+
+export async function GET(request: NextRequest) {
+  const next = safeNextPath(request.nextUrl.searchParams.get("next"));
+  const intent: AuthIntent = request.nextUrl.searchParams.get("intent") === "signup" ? "signup" : "login";
   const fail = new URL(authReturnPath(intent), `${publicRequestOrigin(request)}/`);
   fail.searchParams.set("error", "google");
   if (next !== "/account") fail.searchParams.set("next", next);
@@ -17,7 +18,8 @@ export async function GET(request: Request) {
     return NextResponse.redirect(fail);
   }
 
-  const supabase = await createServerSupabase();
+  const jar: Parameters<typeof redirectWithCookies>[1] = [];
+  const supabase = createRouteSupabase(request, jar);
   if (!supabase) {
     fail.searchParams.set("error", "auth");
     return NextResponse.redirect(fail);
@@ -32,8 +34,8 @@ export async function GET(request: Request) {
   });
 
   if (error || !data.url) {
-    return NextResponse.redirect(fail);
+    return redirectWithCookies(fail, jar);
   }
 
-  return NextResponse.redirect(data.url);
+  return redirectWithCookies(data.url, jar);
 }

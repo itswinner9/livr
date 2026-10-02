@@ -9,7 +9,7 @@ export const RATE_LIMITS = {
   flag: { limit: 20, windowSeconds: 60 * 60 },
   vote: { limit: 120, windowSeconds: 60 * 60 },
   addressSearch: { limit: 60, windowSeconds: 60 },
-  auth: { limit: 10, windowSeconds: 10 * 60 },
+  auth: { limit: 30, windowSeconds: 10 * 60 },
   claim: { limit: 5, windowSeconds: 60 * 60 * 24 },
   managerResponse: { limit: 30, windowSeconds: 60 * 60 },
   accountAction: { limit: 20, windowSeconds: 60 * 60 },
