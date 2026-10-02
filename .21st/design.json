@@ -250,7 +250,9 @@
   },
   "decisions": [
     "LivRank public pages use a cool blue dossier kit: surface #f8f9ff, primary #0f52ba, cards with light shadow, 8–12px radius. Home is a search hero plus recently reviewed cards and city rows. Search is dossier cards plus the real map. Property pages are building dossiers with a sticky jump nav, compact overview, and signals/rent side by side so readers can scan without scrolling the whole file. Every number comes from public_properties, reviews, or rent reports. No invented stats, stock photos, or verified-lease badges. Ratings stay hidden below 3 reviews.",
-    "Property building-file hero (dark dossier): address, a three-cell metric strip (rating / reviews / reported rent) matching search listing cards—bordered surface tray, muted cells, tabular numbers—one verbatim quote, then actions; map sits beside as a matching bordered location panel. Gold only on stars. No photos, glass, or generated heroes."
+    "Property building-file hero (dark dossier): address, a three-cell metric strip (rating / reviews / reported rent) matching search listing cards—bordered surface tray, muted cells, tabular numbers—one verbatim quote, then actions; map sits beside as a matching bordered location panel. Gold only on stars. No photos, glass, or generated heroes.",
+    "Account is a dark dossier: sticky Overview / Reviews / Rent / Saved nav, a three-cell activity strip, bordered profile and privacy cards, and list rows with status pills. No glass, avatars, or generated settings kits.",
+    "Admin is a dark dossier with a sticky sidebar. Total users is a large figure on every admin page (sidebar + overview + /admin/users), counted via staff_profile_counts() so RLS cannot hide the number. Queue and catalog reuse the building-file metric strip. No charts, glass, or generated dashboards."
   ],
   "evidence": [
     {

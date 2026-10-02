@@ -21,7 +21,7 @@ export function ConfirmDeleteButton({
     return (
       <button
         type="button"
-        className="rounded border border-destructive/40 px-2 py-1 text-xs text-destructive hover:bg-destructive/10"
+        className="inline-flex min-h-11 items-center rounded-md border border-destructive/40 px-3 text-sm text-destructive hover:bg-destructive/10"
         onClick={() => setOpen(true)}
       >
         {label}
