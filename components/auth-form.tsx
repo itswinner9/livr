@@ -11,7 +11,7 @@ export function LoginForm({ next }: { next?: string }) {
     null,
   );
   return (
-    <form action={action} className="mt-6 space-y-4">
+    <form action={action} className="mt-4 space-y-4">
       {next ? <input type="hidden" name="next" value={next} /> : null}
       {state?.error ? (
         <p className="border border-destructive/20 bg-surface p-3 text-sm text-destructive" role="alert">
@@ -39,7 +39,7 @@ export function SignupForm({ next }: { next?: string }) {
     null,
   );
   return (
-    <form action={action} className="mt-6 space-y-4">
+    <form action={action} className="mt-4 space-y-4">
       {next ? <input type="hidden" name="next" value={next} /> : null}
       {state?.error ? (
         <p className="border border-destructive/20 bg-surface p-3 text-sm text-destructive" role="alert">

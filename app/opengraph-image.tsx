@@ -8,7 +8,7 @@ export const contentType = "image/png";
 
 export default function Image() {
   return new ImageResponse(
-    <OgFrame kicker="Canada-wide rental records" title="Know the place before you rent it." detail="Renter-reported reviews and rent. Not official history." />,
+    <OgFrame kicker="Canada-wide rental records" title="Know before you move to your new home." detail="Renter-reported reviews and rent. Not official history." />,
     { ...OG_SIZE },
   );
 }

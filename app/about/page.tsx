@@ -5,7 +5,7 @@ import Link from "next/link";
 
 export const metadata: Metadata = pageMetadata(
   "About LivRank",
-  "LivRank is a Canada-wide building file. Look up an address, read what renters said about living there, and add your own experience if you have one.",
+  "Know before you move to your new home. LivRank is a Canada-wide building file: look up an address, read what renters said, and add your own experience if you have one.",
   "/about",
 );
 
@@ -14,7 +14,7 @@ export default function AboutPage() {
     <PageShell>
       <PageHeading
         title="About LivRank"
-        lede="A Canada-wide building file, written by people who lived there. Look up an address before you sign."
+        lede="Know before you move. A Canada-wide building file, written by people who lived there."
       />
 
       <div className="mt-8 space-y-8 text-sm leading-7 text-ink">
