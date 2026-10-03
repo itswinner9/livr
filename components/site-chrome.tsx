@@ -1,12 +1,15 @@
 import { getSessionUser } from "@/lib/auth/session";
+import { getUnreadNotificationCount } from "@/lib/daily/queries";
 import { listListingFacets } from "@/lib/properties/queries";
+import { cityCanonicalPath } from "@/lib/seo";
 import { LivRankWordmark } from "@/components/brand-mark";
 import { CompareNavLink } from "@/components/compare-tray";
-import { Bookmark, Plus, User } from "lucide-react";
+import { Bell, Bookmark, Plus, User } from "lucide-react";
 import Link from "next/link";
 
 export async function SiteHeader() {
   const user = await getSessionUser();
+  const unread = user ? await getUnreadNotificationCount(user.id) : 0;
   return (
     <header className="sticky top-0 z-50 border-b border-rule bg-paper">
       <div className="dossier-wrap flex h-16 items-center justify-between gap-5">
@@ -19,6 +22,11 @@ export async function SiteHeader() {
           <Link href="/explore" className="hover:text-ink">
             Explore
           </Link>
+          {user ? (
+            <Link href="/today" className="hover:text-ink">
+              Today
+            </Link>
+          ) : null}
           <CompareNavLink className="hover:text-ink" />
           {user ? (
             <Link href="/saved" className="hover:text-ink">
@@ -38,14 +46,34 @@ export async function SiteHeader() {
         </nav>
         <div className="flex items-center gap-3 text-sm">
           {user ? (
-            <Link
-              href="/saved"
-              aria-label="Saved buildings"
-              className="inline-flex min-h-11 min-w-11 items-center justify-center text-mute hover:text-ink"
-            >
-              <Bookmark className="size-[22px]" />
-            </Link>
+            <>
+              <Link
+                href="/account/inbox"
+                aria-label={unread > 0 ? `Inbox, ${unread} unread` : "Inbox"}
+                className="relative inline-flex min-h-11 min-w-11 items-center justify-center text-mute hover:text-ink"
+              >
+                <Bell className="size-[22px]" />
+                {unread > 0 ? (
+                  <span className="absolute right-1 top-1 inline-flex min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-paper">
+                    {unread > 9 ? "9+" : unread}
+                  </span>
+                ) : null}
+              </Link>
+              <Link
+                href="/saved"
+                aria-label="Saved buildings"
+                className="inline-flex min-h-11 min-w-11 items-center justify-center text-mute hover:text-ink"
+              >
+                <Bookmark className="size-[22px]" />
+              </Link>
+            </>
           ) : null}
+          <Link
+            href="/rate?intent=rent"
+            className="hidden font-semibold text-mute hover:text-ink lg:inline"
+          >
+            Report rent
+          </Link>
           <Link
             href="/rate"
             className="hidden min-h-11 items-center gap-1 rounded-md bg-accent px-4 font-semibold text-paper hover:bg-accent-hover sm:inline-flex"
@@ -73,17 +101,30 @@ export async function SiteHeader() {
               <Link className="block px-3 py-2 hover:bg-muted" href="/explore">
                 Explore
               </Link>
+              {user ? (
+                <Link className="block px-3 py-2 hover:bg-muted" href="/today">
+                  Today
+                </Link>
+              ) : null}
               <Link className="block px-3 py-2 hover:bg-muted" href="/search">
                 Search
               </Link>
               <CompareNavLink className="block px-3 py-2 hover:bg-muted" />
               {user ? (
-                <Link className="block px-3 py-2 hover:bg-muted" href="/saved">
-                  Saved
-                </Link>
+                <>
+                  <Link className="block px-3 py-2 hover:bg-muted" href="/account/inbox">
+                    Inbox{unread > 0 ? ` (${unread})` : ""}
+                  </Link>
+                  <Link className="block px-3 py-2 hover:bg-muted" href="/saved">
+                    Saved
+                  </Link>
+                </>
               ) : null}
               <Link className="block px-3 py-2 hover:bg-muted" href="/rate">
                 Write a review
+              </Link>
+              <Link className="block px-3 py-2 hover:bg-muted" href="/rate?intent=rent">
+                Report rent only
               </Link>
               {user ? (
                 <Link className="block px-3 py-2 hover:bg-muted" href="/account">
@@ -137,7 +178,7 @@ export async function SiteFooter() {
                   <li key={`${place.city}-${place.province}`}>
                     <a
                       className="text-sm text-mute hover:text-ink"
-                      href={`/explore?city=${encodeURIComponent(place.city)}&province=${encodeURIComponent(place.province)}`}
+                      href={cityCanonicalPath(place)}
                     >
                       {place.city}, {place.province}
                     </a>

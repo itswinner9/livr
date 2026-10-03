@@ -10,6 +10,7 @@ export function AddressConfirmCard({
   mapToken,
   pending: isPendingProperty = false,
   unit = null,
+  preferredIntent,
   onCancel,
 }: {
   draft: Pick<
@@ -19,6 +20,7 @@ export function AddressConfirmCard({
   mapToken: string | null;
   pending?: boolean;
   unit?: string | null;
+  preferredIntent?: "review" | "rent";
   onCancel?: () => void;
 }) {
   const [error, setError] = useState<string | undefined>();
@@ -73,9 +75,11 @@ export function AddressConfirmCard({
           {draft.city}, {draft.province} {draft.postal_code ?? ""}
         </p>
         <p className="mt-3 text-sm text-mute">
-          {isPendingProperty
-            ? "Another renter has started a page for this address. Add your experience to help it go live."
-            : "No renter reviews here yet. Be the first to share what it's like to live here."}
+          {preferredIntent === "rent"
+            ? "You can report what you paid without rating the building."
+            : isPendingProperty
+              ? "Another renter has started a page for this address. Add your experience to help it go live."
+              : "No renter reviews here yet. Be the first to share what it's like to live here."}
         </p>
         {error ? (
           <p role="alert" className="mt-3 border border-rule px-3 py-2 text-sm text-destructive">
@@ -91,24 +95,49 @@ export function AddressConfirmCard({
           <input type="hidden" name="longitude" value={draft.longitude ?? ""} />
           <input type="hidden" name="provider_place_id" value={draft.provider_place_id ?? ""} />
           {unit ? <input type="hidden" name="unit" value={unit} /> : null}
-          <button
-            type="submit"
-            name="intent"
-            value="review"
-            disabled={submitting}
-            className="rounded-md bg-accent px-3.5 py-2 text-sm font-medium text-primary-foreground transition-colors duration-150 hover:bg-accent-hover disabled:opacity-60"
-          >
-            {submitting ? "Opening…" : "Rate this place"}
-          </button>
-          <button
-            type="submit"
-            name="intent"
-            value="rent"
-            disabled={submitting}
-            className="rounded-md border border-rule px-3.5 py-2 text-sm font-medium text-ink transition-colors duration-150 hover:bg-white/5 disabled:opacity-60"
-          >
-            Report rent
-          </button>
+          {preferredIntent === "rent" ? (
+            <>
+              <button
+                type="submit"
+                name="intent"
+                value="rent"
+                disabled={submitting}
+                className="rounded-md bg-accent px-3.5 py-2 text-sm font-medium text-primary-foreground transition-colors duration-150 hover:bg-accent-hover disabled:opacity-60"
+              >
+                {submitting ? "Opening…" : "Report rent only"}
+              </button>
+              <button
+                type="submit"
+                name="intent"
+                value="review"
+                disabled={submitting}
+                className="rounded-md border border-rule px-3.5 py-2 text-sm font-medium text-ink transition-colors duration-150 hover:bg-muted disabled:opacity-60"
+              >
+                Rate this place
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="submit"
+                name="intent"
+                value="review"
+                disabled={submitting}
+                className="rounded-md bg-accent px-3.5 py-2 text-sm font-medium text-primary-foreground transition-colors duration-150 hover:bg-accent-hover disabled:opacity-60"
+              >
+                {submitting ? "Opening…" : "Rate this place"}
+              </button>
+              <button
+                type="submit"
+                name="intent"
+                value="rent"
+                disabled={submitting}
+                className="rounded-md border border-rule px-3.5 py-2 text-sm font-medium text-ink transition-colors duration-150 hover:bg-muted disabled:opacity-60"
+              >
+                Report rent only
+              </button>
+            </>
+          )}
           {onCancel ? (
             <button type="button" onClick={onCancel} className="ml-auto text-sm text-mute hover:text-ink">
               Not this one

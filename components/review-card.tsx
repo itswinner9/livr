@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import type { OwnPendingReply, PublicReviewReply, Review } from "@/types/review";
+import type { OwnPendingReply, PublicReviewReply, Review, ReviewPhoto } from "@/types/review";
+import { ReviewPhotoGrid } from "@/components/review-photo-grid";
 import { formatDate } from "@/lib/utils";
 import { Stars } from "@/components/stars";
 import { FlagReviewButton } from "./flag-review-button";
@@ -25,12 +26,14 @@ const CATEGORIES: [keyof Review, string][] = [
 
 export function ReviewCard({
   review,
+  photos = [],
   replies = [],
   ownPending = [],
   loggedIn = false,
   loginHref,
 }: {
   review: Review;
+  photos?: ReviewPhoto[];
   replies?: PublicReviewReply[];
   ownPending?: OwnPendingReply[];
   loggedIn?: boolean;
@@ -78,6 +81,7 @@ export function ReviewCard({
       >
         {review.review_body}
       </p>
+      <ReviewPhotoGrid photos={photos} />
       {long ? (
         <button
           type="button"

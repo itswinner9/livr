@@ -2,10 +2,13 @@ import { getSessionUser } from "@/lib/auth/session";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { StatusBadge } from "@/components/status-badge";
 import { EmptyState } from "@/components/empty-state";
+import { ReviewPhotoGrid } from "@/components/review-photo-grid";
+import { reviewPhotoUrl } from "@/lib/reviews/photos";
 import { formatDate } from "@/lib/utils";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import type { Metadata } from "next";
+import type { ReviewPhoto } from "@/types/review";
 
 export const metadata: Metadata = { title: "My reviews" };
 
@@ -16,11 +19,17 @@ export default async function AccountReviewsPage() {
   const { data } = supabase
     ? await supabase
         .from("reviews")
-        .select("id, review_title, status, created_at")
+        .select("id, review_title, status, created_at, review_photos (id, review_id, storage_path, sort_order)")
         .eq("user_id", user.id)
         .order("created_at", { ascending: false })
     : { data: [] };
-  const rows = data ?? [];
+  const rows = (data ?? []) as {
+    id: string;
+    review_title: string;
+    status: string;
+    created_at: string;
+    review_photos?: { id: string; review_id: string; storage_path: string; sort_order: number }[] | null;
+  }[];
 
   return (
     <div className="bg-paper py-8">
@@ -50,10 +59,23 @@ export default async function AccountReviewsPage() {
         ) : (
           <ul className="mt-6 overflow-hidden rounded-md border border-rule bg-surface">
             {rows.map((review) => (
-              <li key={review.id} className="flex min-h-14 items-center justify-between gap-3 border-b border-rule px-4 last:border-0">
+              <li key={review.id} className="flex min-h-14 items-center justify-between gap-3 border-b border-rule px-4 py-3 last:border-0">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold text-ink">{review.review_title}</p>
                   <p className="text-sm text-mute">{formatDate(review.created_at)}</p>
+                  {review.review_photos?.length ? (
+                    <div className="mt-2">
+                      <ReviewPhotoGrid
+                        compact
+                        photos={review.review_photos.map(
+                          (photo): ReviewPhoto => ({
+                            ...photo,
+                            url: reviewPhotoUrl(photo.storage_path),
+                          }),
+                        )}
+                      />
+                    </div>
+                  ) : null}
                 </div>
                 <StatusBadge status={review.status} />
               </li>

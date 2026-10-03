@@ -1,7 +1,10 @@
 import { getAdminCounts, getStaffClient } from "@/lib/admin/data";
 import { ModerationButtons } from "@/components/admin-table";
 import { EmptyState } from "@/components/empty-state";
+import { ReviewPhotoGrid } from "@/components/review-photo-grid";
 import { holdReasonsFromFlags, labelHoldReason } from "@/lib/moderation/review-gate";
+import { reviewPhotoUrl } from "@/lib/reviews/photos";
+import type { ReviewPhoto } from "@/types/review";
 import Link from "next/link";
 
 type QueueReview = {
@@ -98,6 +101,28 @@ export default async function AdminReviewsPage({
   ]);
   const reviews = (reviewData ?? []) as unknown as QueueReview[];
   const pendingReplies = (replyData ?? []) as unknown as QueueReply[];
+  const reviewIds = reviews.map((review) => review.id);
+  const { data: photoData } =
+    client && reviewIds.length > 0
+      ? await client
+          .from("review_photos")
+          .select("id, review_id, storage_path, sort_order")
+          .in("review_id", reviewIds)
+          .order("sort_order", { ascending: true })
+      : { data: [] };
+  const photosByReview = new Map<string, ReviewPhoto[]>();
+  for (const row of photoData ?? []) {
+    const photo = {
+      id: String(row.id),
+      review_id: String(row.review_id),
+      storage_path: String(row.storage_path),
+      sort_order: Number(row.sort_order ?? 0),
+      url: reviewPhotoUrl(String(row.storage_path)),
+    };
+    const list = photosByReview.get(photo.review_id) ?? [];
+    list.push(photo);
+    photosByReview.set(photo.review_id, list);
+  }
 
   return (
     <div>
@@ -191,6 +216,9 @@ export default async function AdminReviewsPage({
                   </div>
                 </div>
                 <p className="mt-3 whitespace-pre-wrap text-sm text-ink">{review.review_body}</p>
+                <div className="mt-3">
+                  <ReviewPhotoGrid photos={photosByReview.get(review.id) ?? []} />
+                </div>
                 {reasons.length ? (
                   <ul className="mt-3 flex flex-wrap gap-2">
                     {reasons.map((reason) => (

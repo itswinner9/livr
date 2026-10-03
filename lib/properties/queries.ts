@@ -1,10 +1,15 @@
 import { buildNormalizedAddress, parseSearchQuery } from "@/lib/address/normalize";
+import { LISTINGS_TAG } from "@/lib/cache/listings";
+import { latestRentsByProperty, type LatestRent } from "@/lib/rent-reports/latest";
+import { createPublicSupabase } from "@/lib/supabase/public";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { unstable_cache } from "next/cache";
 import { calculateRatingSummary } from "@/lib/ratings/summary";
 import { MIN_REVIEWS_FOR_RATING } from "@/lib/ratings/aggregate";
 import { aggregateRentHistory } from "@/lib/rent-reports/aggregate";
 import { completeProperty, type IssueMention, type Property, type RatingSummary, type RentHistoryGroup } from "@/types/property";
-import type { OwnPendingReply, PublicReviewReply, Review } from "@/types/review";
+import { reviewPhotoUrl } from "@/lib/reviews/photos";
+import type { OwnPendingReply, PublicReviewReply, Review, ReviewPhoto } from "@/types/review";
 import { isUuid } from "@/lib/utils";
 import { cache } from "react";
 
@@ -60,26 +65,8 @@ function matchesListingFilters(p: Property, filters: ListingFilters) {
   return true;
 }
 
-export async function searchProperties(
-  query: string,
-  filters: ListingFilters = {},
-): Promise<Property[]> {
-  const parsed = parseSearchQuery(query);
-  const supabase = await createServerSupabase();
-  if (!supabase) return [];
-  const { data, error } = await supabase.rpc("search_properties", {
-    p_query: parsed.normalized,
-    p_limit: 25,
-    p_province: filters.province ?? null,
-  });
-  logQueryError("search_properties", error);
-  return ((data ?? []) as Record<string, unknown>[])
-    .map(mapProperty)
-    .filter((p) => matchesListingFilters(p, filters));
-}
-
-export async function browseListings(filters: ListingFilters = {}, limit = 24): Promise<Property[]> {
-  const supabase = await createServerSupabase();
+async function fetchPublicProperties(filters: ListingFilters, limit: number): Promise<Property[]> {
+  const supabase = createPublicSupabase();
   if (!supabase) return [];
   let q = supabase.from("public_properties").select("*");
   if (filters.city) q = q.eq("city", filters.city);
@@ -95,46 +82,135 @@ export async function browseListings(filters: ListingFilters = {}, limit = 24): 
   return ((data ?? []) as Record<string, unknown>[]).map(mapProperty);
 }
 
-export async function listListingFacets() {
-  const rows = await listPublicProperties(50);
-  const cities = [...new Set(rows.map((p) => p.city).filter(Boolean))].sort((a, b) => a.localeCompare(b));
-  const provinces = [...new Set(rows.map((p) => p.province).filter(Boolean))].sort((a, b) => a.localeCompare(b));
-  const types = [...new Set(rows.map((p) => p.property_type).filter((t): t is NonNullable<typeof t> => Boolean(t)))];
-  const cityCounts = Object.fromEntries(
-    cities.map((city) => [city, rows.filter((property) => property.city === city).length]),
-  );
-  const placeMap = new Map<string, { city: string; province: string; count: number }>();
-  for (const property of rows) {
-    const key = `${property.city}|${property.province}`;
-    const current = placeMap.get(key);
-    if (current) current.count += 1;
-    else placeMap.set(key, { city: property.city, province: property.province, count: 1 });
-  }
-  const cityPlaces = [...placeMap.values()].sort((a, b) => a.city.localeCompare(b.city));
-  return {
-    cities,
-    provinces,
-    types,
-    cityCounts,
-    cityPlaces,
-    buildingCount: rows.length,
-    reviewCount: rows.reduce((sum, property) => sum + property.review_count, 0),
-    rentReportCount: rows.reduce((sum, property) => sum + property.rent_report_count, 0),
-  };
+const cachedBrowse = unstable_cache(
+  async (payload: string) => {
+    const { filters, limit } = JSON.parse(payload) as { filters: ListingFilters; limit: number };
+    return fetchPublicProperties(filters, limit);
+  },
+  ["browse-listings-v1"],
+  { revalidate: 60, tags: [LISTINGS_TAG] },
+);
+
+const cachedSearch = unstable_cache(
+  async (normalized: string, province: string) => {
+    const supabase = createPublicSupabase();
+    if (!supabase) return [] as Property[];
+    const { data, error } = await supabase.rpc("search_properties", {
+      p_query: normalized,
+      p_limit: 25,
+      p_province: province || null,
+    });
+    logQueryError("search_properties", error);
+    return ((data ?? []) as Record<string, unknown>[]).map(mapProperty);
+  },
+  ["search-properties-v1"],
+  { revalidate: 30, tags: [LISTINGS_TAG] },
+);
+
+export async function searchProperties(
+  query: string,
+  filters: ListingFilters = {},
+): Promise<Property[]> {
+  const parsed = parseSearchQuery(query);
+  const rows = await cachedSearch(parsed.normalized, filters.province ?? "");
+  return rows.filter((property) => matchesListingFilters(property, filters));
 }
 
+export async function browseListings(filters: ListingFilters = {}, limit = 24): Promise<Property[]> {
+  return cachedBrowse(JSON.stringify({ filters, limit }));
+}
+
+type FacetRow = {
+  city: string;
+  province: string;
+  property_type: Property["property_type"];
+  review_count: number;
+  rent_report_count: number;
+};
+
+async function fetchFacetRows(): Promise<FacetRow[]> {
+  const supabase = createPublicSupabase();
+  if (!supabase) return [];
+  const pageSize = 1000;
+  const rows: FacetRow[] = [];
+  let from = 0;
+  for (;;) {
+    const { data, error } = await supabase
+      .from("public_properties")
+      .select("city, province, property_type, review_count, rent_report_count")
+      .range(from, from + pageSize - 1);
+    logQueryError("listListingFacets", error);
+    if (error || !data?.length) break;
+    rows.push(
+      ...data.map((row) => ({
+        city: String(row.city ?? ""),
+        province: String(row.province ?? ""),
+        property_type: (row.property_type as Property["property_type"]) ?? null,
+        review_count: Number(row.review_count ?? 0),
+        rent_report_count: Number(row.rent_report_count ?? 0),
+      })),
+    );
+    if (data.length < pageSize) break;
+    from += pageSize;
+  }
+  return rows;
+}
+
+const cachedFacets = unstable_cache(
+  async () => {
+    const rows = await fetchFacetRows();
+    const cities = [...new Set(rows.map((p) => p.city).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    const provinces = [...new Set(rows.map((p) => p.province).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    const types = [...new Set(rows.map((p) => p.property_type).filter((t): t is NonNullable<typeof t> => Boolean(t)))];
+    const cityCounts = Object.fromEntries(
+      cities.map((city) => [city, rows.filter((property) => property.city === city).length]),
+    );
+    const placeMap = new Map<string, { city: string; province: string; count: number }>();
+    for (const property of rows) {
+      const key = `${property.city}|${property.province}`;
+      const current = placeMap.get(key);
+      if (current) current.count += 1;
+      else placeMap.set(key, { city: property.city, province: property.province, count: 1 });
+    }
+    const cityPlaces = [...placeMap.values()].sort((a, b) => a.city.localeCompare(b.city));
+    return {
+      cities,
+      provinces,
+      types,
+      cityCounts,
+      cityPlaces,
+      buildingCount: rows.length,
+      reviewCount: rows.reduce((sum, property) => sum + property.review_count, 0),
+      rentReportCount: rows.reduce((sum, property) => sum + property.rent_report_count, 0),
+    };
+  },
+  ["listing-facets-v2"],
+  { revalidate: 60, tags: [LISTINGS_TAG] },
+);
+
+export function listListingFacets() {
+  return cachedFacets();
+}
+
+const cachedPublicProperty = unstable_cache(
+  async (id: string) => {
+    const supabase = createPublicSupabase();
+    if (!supabase) return null;
+    const column = isUuid(id) ? "id" : "slug";
+    const { data, error } = await supabase.from("public_properties").select("*").eq(column, id).maybeSingle();
+    logQueryError("getPropertyById", error);
+    return data ? mapProperty(data as Record<string, unknown>) : null;
+  },
+  ["public-property-v1"],
+  { revalidate: 60, tags: [LISTINGS_TAG] },
+);
+
 export const getPropertyById = cache(async function getPropertyById(id: string): Promise<Property | null> {
+  const property = await cachedPublicProperty(id);
+  if (property) return property;
+  if (isUuid(id)) return null;
   const supabase = await createServerSupabase();
   if (!supabase) return null;
-  const column = isUuid(id) ? "id" : "slug";
-  const { data, error } = await supabase
-    .from("public_properties")
-    .select("*")
-    .eq(column, id)
-    .maybeSingle();
-  logQueryError("getPropertyById", error);
-  if (data) return mapProperty(data);
-  if (column === "id") return null;
   const { data: redirect } = await supabase
     .from("property_slug_redirects")
     .select("property_id")
@@ -177,16 +253,7 @@ export async function getPropertyBySlug(slug: string) {
 
 /** Public listings from the live database. */
 export async function listPublicProperties(limit = 8): Promise<Property[]> {
-  const supabase = await createServerSupabase();
-  if (!supabase) return [];
-  const { data, error } = await supabase
-    .from("public_properties")
-    .select("*")
-    .order("last_review_date", { ascending: false, nullsFirst: false })
-    .order("review_count", { ascending: false })
-    .limit(limit);
-  logQueryError("listPublicProperties", error);
-  return ((data ?? []) as Record<string, unknown>[]).map(mapProperty);
+  return browseListings({}, limit);
 }
 
 export async function getFeaturedProperty(): Promise<Property | null> {
@@ -195,10 +262,8 @@ export async function getFeaturedProperty(): Promise<Property | null> {
 }
 
 export async function listNearbyProperties(property: Property, limit = 5): Promise<Property[]> {
-  const rows = await listPublicProperties(50);
-  return rows
-    .filter((row) => row.id !== property.id && row.city === property.city)
-    .slice(0, limit);
+  const rows = await browseListings({ city: property.city, province: property.province }, limit + 1);
+  return rows.filter((row) => row.id !== property.id).slice(0, limit);
 }
 
 export function searchExamplesFrom(properties: Property[], max = 3): string[] {
@@ -231,7 +296,7 @@ export type PublicPropertyUnit = {
 };
 
 export async function getPropertyUnits(propertyId: string): Promise<PublicPropertyUnit[]> {
-  const supabase = await createServerSupabase();
+  const supabase = createPublicSupabase();
   if (!supabase) return [];
   const { data } = await supabase
     .from("public_property_units")
@@ -244,7 +309,7 @@ export async function getPropertyUnits(propertyId: string): Promise<PublicProper
 export async function getUnitReviews(propertyId: string, unitKey: string) {
   const key = unitKey.trim().toUpperCase();
   if (!key) return { unit: null as PublicPropertyUnit | null, reviews: [] as Review[] };
-  const supabase = await createServerSupabase();
+  const supabase = createPublicSupabase();
   if (!supabase) return { unit: null as PublicPropertyUnit | null, reviews: [] as Review[] };
   const [{ data: unit }, { data: reviews }] = await Promise.all([
     supabase
@@ -266,33 +331,35 @@ export async function getUnitReviews(propertyId: string, unitKey: string) {
   };
 }
 
+const cachedPropertyReviews = unstable_cache(
+  async (id: string, sort: string, page: number, pageSize: number) => {
+    const supabase = createPublicSupabase();
+    if (!supabase) return { reviews: [] as Review[], total: 0 };
+    let q = supabase.from("public_reviews").select("*", { count: "exact" }).eq("property_id", id);
+    if (sort === "highest") q = q.order("overall_rating", { ascending: false });
+    else if (sort === "lowest") q = q.order("overall_rating", { ascending: true });
+    else if (sort === "helpful") q = q.order("helpful_count", { ascending: false });
+    else q = q.order("created_at", { ascending: false });
+    const from = (page - 1) * pageSize;
+    const { data, count } = await q.range(from, from + pageSize - 1);
+    return {
+      reviews: ((data ?? []) as Review[]).map((row) => ({
+        ...row,
+        unit_key: row.unit_key ?? null,
+        unit_id: row.unit_id ?? null,
+      })),
+      total: count ?? 0,
+    };
+  },
+  ["property-reviews-v1"],
+  { revalidate: 60, tags: [LISTINGS_TAG] },
+);
+
 export async function getPropertyReviews(
   id: string,
   opts: { sort?: string; page?: number; pageSize?: number } = {},
 ) {
-  const page = opts.page ?? 1;
-  const pageSize = opts.pageSize ?? 10;
-  const sort = opts.sort ?? "recent";
-  const supabase = await createServerSupabase();
-  if (!supabase) return { reviews: [] as Review[], total: 0 };
-  let q = supabase
-    .from("public_reviews")
-    .select("*", { count: "exact" })
-    .eq("property_id", id);
-  if (sort === "highest") q = q.order("overall_rating", { ascending: false });
-  else if (sort === "lowest") q = q.order("overall_rating", { ascending: true });
-  else if (sort === "helpful") q = q.order("helpful_count", { ascending: false });
-  else q = q.order("created_at", { ascending: false });
-  const from = (page - 1) * pageSize;
-  const { data, count } = await q.range(from, from + pageSize - 1);
-  return {
-    reviews: ((data ?? []) as Review[]).map((row) => ({
-      ...row,
-      unit_key: row.unit_key ?? null,
-      unit_id: row.unit_id ?? null,
-    })),
-    total: count ?? 0,
-  };
+  return cachedPropertyReviews(id, opts.sort ?? "recent", opts.page ?? 1, opts.pageSize ?? 10);
 }
 
 function groupByReviewId<T extends { review_id: string }>(rows: T[]) {
@@ -305,10 +372,30 @@ function groupByReviewId<T extends { review_id: string }>(rows: T[]) {
   return map;
 }
 
+export async function getPublishedPhotosByReview(reviewIds: string[]) {
+  const empty = new Map<string, ReviewPhoto[]>();
+  if (reviewIds.length === 0) return empty;
+  const supabase = createPublicSupabase();
+  if (!supabase) return empty;
+  const { data } = await supabase
+    .from("public_review_photos")
+    .select("id, review_id, storage_path, sort_order")
+    .in("review_id", reviewIds)
+    .order("sort_order", { ascending: true });
+  return groupByReviewId(
+    ((data ?? []) as { id: string; review_id: string; storage_path: string; sort_order: number }[]).map(
+      (row) => ({
+        ...row,
+        url: reviewPhotoUrl(row.storage_path),
+      }),
+    ),
+  );
+}
+
 export async function getPublishedRepliesByReview(reviewIds: string[]) {
   const empty = new Map<string, PublicReviewReply[]>();
   if (reviewIds.length === 0) return empty;
-  const supabase = await createServerSupabase();
+  const supabase = createPublicSupabase();
   if (!supabase) return empty;
   const { data } = await supabase
     .from("public_review_replies")
@@ -333,51 +420,105 @@ export async function getOwnPendingRepliesByReview(reviewIds: string[], userId: 
   return groupByReviewId((data ?? []) as OwnPendingReply[]);
 }
 
-export async function getPropertyRatingSummary(id: string): Promise<RatingSummary> {
-  const supabase = await createServerSupabase();
-  const { data } = supabase
-    ? await supabase
-        .from("public_reviews")
-        .select(
-          "overall_rating, maintenance_rating, management_rating, noise_rating, cleanliness_rating, building_condition_rating, parking_rating, value_rating",
-        )
-        .eq("property_id", id)
-    : { data: null };
-  const summary = calculateRatingSummary(data ?? []);
-  if (summary.reviewCount >= MIN_REVIEWS_FOR_RATING) return summary;
-  return {
-    overall: null,
-    maintenance: null,
-    management: null,
-    noise: null,
-    cleanliness: null,
-    building_condition: null,
-    parking: null,
-    value: null,
-    reviewCount: summary.reviewCount,
-  };
+const cachedRatingSummary = unstable_cache(
+  async (id: string): Promise<RatingSummary> => {
+    const supabase = createPublicSupabase();
+    const { data } = supabase
+      ? await supabase
+          .from("public_reviews")
+          .select(
+            "overall_rating, maintenance_rating, management_rating, noise_rating, cleanliness_rating, building_condition_rating, parking_rating, value_rating",
+          )
+          .eq("property_id", id)
+      : { data: null };
+    const summary = calculateRatingSummary(data ?? []);
+    if (summary.reviewCount >= MIN_REVIEWS_FOR_RATING) return summary;
+    return {
+      overall: null,
+      maintenance: null,
+      management: null,
+      noise: null,
+      cleanliness: null,
+      building_condition: null,
+      parking: null,
+      value: null,
+      reviewCount: summary.reviewCount,
+    };
+  },
+  ["property-rating-v1"],
+  { revalidate: 60, tags: [LISTINGS_TAG] },
+);
+
+export function getPropertyRatingSummary(id: string): Promise<RatingSummary> {
+  return cachedRatingSummary(id);
 }
 
-export async function getPropertyRentHistory(id: string): Promise<RentHistoryGroup[]> {
-  const supabase = await createServerSupabase();
-  if (!supabase) return [];
-  const { data } = await supabase
-    .from("public_rent_reports")
-    .select("bedrooms, monthly_rent, lease_start_year")
-    .eq("property_id", id);
-  return aggregateRentHistory(data ?? []);
+const cachedRentHistory = unstable_cache(
+  async (id: string): Promise<RentHistoryGroup[]> => {
+    const supabase = createPublicSupabase();
+    if (!supabase) return [];
+    const { data } = await supabase
+      .from("public_rent_reports")
+      .select("bedrooms, monthly_rent, lease_start_year")
+      .eq("property_id", id);
+    return aggregateRentHistory(data ?? []);
+  },
+  ["property-rent-v1"],
+  { revalidate: 60, tags: [LISTINGS_TAG] },
+);
+
+export function getPropertyRentHistory(id: string): Promise<RentHistoryGroup[]> {
+  return cachedRentHistory(id);
 }
 
-export async function getPropertyIssues(id: string): Promise<IssueMention[]> {
-  const supabase = await createServerSupabase();
-  if (!supabase) return [];
-  const { data } = await supabase
-    .from("public_property_topics")
-    .select("topic, mentions")
-    .eq("property_id", id)
-    .order("mentions", { ascending: false })
-    .limit(8);
-  return (data ?? []) as IssueMention[];
+const cachedLatestRents = unstable_cache(
+  async (joined: string): Promise<Record<string, LatestRent>> => {
+    const ids = joined.split(",").filter(Boolean);
+    if (ids.length === 0) return {};
+    const supabase = createPublicSupabase();
+    if (!supabase) return {};
+    const { data, error } = await supabase
+      .from("public_rent_reports")
+      .select("property_id, bedrooms, monthly_rent, lease_start_year")
+      .in("property_id", ids);
+    logQueryError("getLatestRentsForProperties", error);
+    return latestRentsByProperty(
+      ((data ?? []) as {
+        property_id: string;
+        bedrooms: number;
+        monthly_rent: number | string;
+        lease_start_year: number | null;
+      }[]),
+    );
+  },
+  ["latest-rents-v1"],
+  { revalidate: 60, tags: [LISTINGS_TAG] },
+);
+
+export function getLatestRentsForProperties(ids: string[]): Promise<Record<string, LatestRent>> {
+  const unique = [...new Set(ids.filter(Boolean))].sort();
+  if (unique.length === 0) return Promise.resolve({});
+  return cachedLatestRents(unique.join(","));
+}
+
+const cachedPropertyIssues = unstable_cache(
+  async (id: string): Promise<IssueMention[]> => {
+    const supabase = createPublicSupabase();
+    if (!supabase) return [];
+    const { data } = await supabase
+      .from("public_property_topics")
+      .select("topic, mentions")
+      .eq("property_id", id)
+      .order("mentions", { ascending: false })
+      .limit(8);
+    return (data ?? []) as IssueMention[];
+  },
+  ["property-issues-v1"],
+  { revalidate: 60, tags: [LISTINGS_TAG] },
+);
+
+export function getPropertyIssues(id: string): Promise<IssueMention[]> {
+  return cachedPropertyIssues(id);
 }
 
 export async function getPropertyAiSummary(id: string) {

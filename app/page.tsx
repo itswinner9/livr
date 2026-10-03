@@ -3,7 +3,15 @@ import { JsonLd } from "@/components/json-ld";
 import { listingHref } from "@/components/listing-ui";
 import { listingFiltersFrom, loadListingMarketplace } from "@/lib/listings/page-data";
 import { hasSupabaseConfig } from "@/lib/env";
-import { SITE_DESCRIPTION, SITE_NAME, SITE_TAGLINE, faqJsonLd, pageMetadata, websiteJsonLd } from "@/lib/seo";
+import {
+  SITE_DESCRIPTION,
+  SITE_NAME,
+  SITE_TAGLINE,
+  exploreCityRedirectPath,
+  faqJsonLd,
+  pageMetadata,
+  websiteJsonLd,
+} from "@/lib/seo";
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 
@@ -19,6 +27,8 @@ export default async function HomePage({
 }) {
   const params = await searchParams;
   const filters = listingFiltersFrom(params);
+  const cityPath = exploreCityRedirectPath(filters);
+  if (cityPath) redirect(cityPath);
   if (filters.city || filters.province || filters.propertyType || filters.hasReviews || filters.hasRent) {
     redirect(listingHref("/explore", filters, {}));
   }

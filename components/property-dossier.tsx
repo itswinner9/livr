@@ -16,9 +16,10 @@ import { Stars } from "@/components/stars";
 import { itemFromProperty } from "@/lib/compare/ids";
 import { MIN_REVIEWS_FOR_RATING } from "@/lib/ratings/aggregate";
 import { verbatimReviewQuotes } from "@/lib/reviews/quotes";
+import { cityCanonicalPath, provinceExplorePath, provinceLabel } from "@/lib/seo";
 import { formatCad, formatDate, cn } from "@/lib/utils";
 import { PROPERTY_TYPE_LABELS, type IssueMention, type Property, type RatingSummary, type RentHistoryGroup } from "@/types/property";
-import type { OwnPendingReply, PublicReviewReply, Review } from "@/types/review";
+import type { OwnPendingReply, PublicReviewReply, Review, ReviewPhoto } from "@/types/review";
 import type { PublicPropertyUnit } from "@/lib/properties/queries";
 
 function latestReportedRent(groups: RentHistoryGroup[]) {
@@ -84,6 +85,7 @@ export function PropertyDossier({
   token,
   repliesByReview,
   pendingByReview,
+  photosByReview,
   loggedIn,
 }: {
   property: Property;
@@ -98,6 +100,7 @@ export function PropertyDossier({
   token: string | null;
   repliesByReview: Map<string, PublicReviewReply[]>;
   pendingByReview: Map<string, OwnPendingReply[]>;
+  photosByReview?: Map<string, ReviewPhoto[]>;
   loggedIn: boolean;
 }) {
   const typeLabel = property.property_type ? PROPERTY_TYPE_LABELS[property.property_type] : null;
@@ -130,11 +133,15 @@ export function PropertyDossier({
       <section className="bg-surface">
         <div className="dossier-wrap py-3">
           <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1 text-sm text-mute">
-            <Link href="/explore" className="hover:text-accent">
-              Explore
+            <Link href="/" className="hover:text-accent">
+              Home
             </Link>
             <ChevronRight className="size-3.5" aria-hidden />
-            <Link href={`/explore?city=${encodeURIComponent(property.city)}`} className="hover:text-accent">
+            <Link href={provinceExplorePath(property.province)} className="hover:text-accent">
+              {provinceLabel(property.province)}
+            </Link>
+            <ChevronRight className="size-3.5" aria-hidden />
+            <Link href={cityCanonicalPath({ city: property.city, province: property.province })} className="hover:text-accent">
               {property.city}
             </Link>
             <ChevronRight className="size-3.5" aria-hidden />
@@ -412,6 +419,7 @@ export function PropertyDossier({
                 <li key={review.id}>
                   <ReviewCard
                     review={review}
+                    photos={photosByReview?.get(review.id) ?? []}
                     replies={repliesByReview.get(review.id) ?? []}
                     ownPending={pendingByReview.get(review.id) ?? []}
                     loggedIn={loggedIn}

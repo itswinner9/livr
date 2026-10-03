@@ -17,6 +17,7 @@ export default function robots(): MetadataRoute.Robots {
           "/signup",
           "/auth",
           "/saved",
+          "/today",
           "/rate",
           "/review/new",
           "/rent-report/new",

@@ -2,6 +2,7 @@ import "server-only";
 
 import { processPublishedReview } from "@/lib/actions/ai";
 import { generatePropertySummary } from "@/lib/ai/provider";
+import { notifyContributor, notifySavedWatchers } from "@/lib/notifications/watch";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -56,7 +57,11 @@ export async function publishReview(
   reviewId: string,
   actor: PublishActor,
 ): Promise<PublishResult> {
-  const { data: row } = await client.from("reviews").select("id, property_id, status").eq("id", reviewId).maybeSingle();
+  const { data: row } = await client
+    .from("reviews")
+    .select("id, property_id, status, user_id")
+    .eq("id", reviewId)
+    .maybeSingle();
   if (!row) return { error: "We couldn't update that item." };
 
   if (row.status !== "published") {
@@ -87,9 +92,16 @@ export async function publishReview(
   await processPublishedReview(reviewId);
   if (row.property_id) {
     await maybeRefreshPropertySummary(row.property_id);
+    await notifySavedWatchers({
+      propertyId: row.property_id,
+      kind: "review",
+      excludeUserId: row.user_id,
+    });
+    await notifyContributor({ userId: row.user_id, kind: "review", propertyId: row.property_id });
     revalidatePath(`/property/${row.property_id}`);
     revalidatePath("/property/[id]", "page");
     revalidatePath("/search");
+    revalidatePath("/today");
   }
   revalidatePath("/admin");
   revalidatePath("/admin/reviews");

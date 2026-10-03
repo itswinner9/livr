@@ -29,12 +29,14 @@ export function AddressSearch({
   mapToken = null,
   city = "",
   province = "",
+  intent,
 }: {
   defaultValue?: string;
   size?: "lg" | "md";
   mapToken?: string | null;
   city?: string;
   province?: string;
+  intent?: "review" | "rent";
 }) {
   const router = useRouter();
   const listId = useId();
@@ -121,6 +123,14 @@ export function AddressSearch({
     setOpen(false);
     if (option.kind === "search") return goToSearch();
     if (option.kind === "property") {
+      if (intent === "rent") {
+        router.push(`/rent-report/new?propertyId=${option.item.id}`);
+        return;
+      }
+      if (intent === "review") {
+        router.push(`/review/new?propertyId=${option.item.id}`);
+        return;
+      }
       router.push(`/property/${option.item.slug || option.item.id}`);
       return;
     }
@@ -278,7 +288,9 @@ export function AddressSearch({
               ) : null}
               {suggestionOptions.length > 0 ? (
                 <div role="group" aria-label="Rate a new address">
-                  <p className="kicker px-4 pb-1 pt-2">Rate a new address</p>
+                  <p className="kicker px-4 pb-1 pt-2">
+                    {intent === "rent" ? "Report rent at a new address" : "Rate a new address"}
+                  </p>
                   {suggestionOptions.map((o) =>
                     o.kind === "suggestion" ? (
                       <div key={o.key} {...optionProps(o)}>
@@ -328,6 +340,7 @@ export function AddressSearch({
             mapToken={mapToken}
             pending={confirm.pending}
             unit={confirm.unit}
+            preferredIntent={intent}
             onCancel={() => {
               setConfirm(null);
               inputRef.current?.focus();

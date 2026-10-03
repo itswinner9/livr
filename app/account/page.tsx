@@ -10,7 +10,7 @@ import { getSavedProperties } from "@/lib/properties/queries";
 import { formatCad, formatDate } from "@/lib/utils";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { Bookmark, ChevronRight, PenLine, Receipt } from "lucide-react";
+import { Bell, Bookmark, ChevronRight, PenLine, Receipt, Sun } from "lucide-react";
 
 function planLabel(status: string) {
   if (status === "free") return "Free";
@@ -161,6 +161,18 @@ export default async function AccountPage() {
           <div className="flex flex-col gap-5 lg:col-span-5">
             <nav aria-label="Account shortcuts" className="overflow-hidden rounded-md border border-rule bg-surface">
               {[
+                {
+                  href: "/today",
+                  label: "Today",
+                  hint: "Home, rent log, city pulse",
+                  icon: Sun,
+                },
+                {
+                  href: "/account/inbox",
+                  label: "Inbox",
+                  hint: "Watch alerts",
+                  icon: Bell,
+                },
                 {
                   href: "/account/reviews",
                   label: "My reviews",

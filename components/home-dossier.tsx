@@ -9,7 +9,7 @@ import {
   type ListingFacets,
   type ListingFiltersState,
 } from "@/components/listing-ui";
-import { HOME_FAQS } from "@/lib/seo";
+import { cityCanonicalPath, HOME_FAQS } from "@/lib/seo";
 
 export function HomeDossier({
   filters,
@@ -82,7 +82,7 @@ export function HomeDossier({
               {facets.cityPlaces.map((place) => (
                 <Link
                   key={`${place.city}-${place.province}`}
-                  href={listingHref("/explore", filters, { city: place.city, province: place.province })}
+                  href={cityCanonicalPath(place)}
                   className="inline-flex min-h-11 items-center rounded-md border border-rule bg-muted px-3 text-sm font-semibold text-mute hover:border-ink hover:text-ink"
                 >
                   {place.city}
@@ -194,7 +194,7 @@ export function HomeDossier({
                 (place) => (
                   <Link
                     key={`${place.city}-${place.province}`}
-                    href={listingHref("/explore", filters, { city: place.city, province: place.province || filters.province })}
+                    href={place.province ? cityCanonicalPath(place) : listingHref("/explore", filters, { city: place.city, province: filters.province })}
                     className="flex flex-col justify-between rounded-md bg-surface p-6 border border-rule hover:text-accent"
                   >
                     <h3 className="text-xl font-semibold text-ink">{place.city}</h3>
