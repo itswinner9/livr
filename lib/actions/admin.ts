@@ -2,6 +2,7 @@
 
 import { getSessionUser, isStaff } from "@/lib/auth/session";
 import { publishReply, publishReview } from "@/lib/moderation/publish";
+import { notifyContributor, notifySavedWatchers } from "@/lib/notifications/watch";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
@@ -53,7 +54,7 @@ export async function moderateContent(formData: FormData): Promise<NonNullable<M
   const { data: row } =
     targetType === "review_reply"
       ? await writer.from("review_replies").select("reviews (property_id)").eq("id", targetId).maybeSingle()
-      : await writer.from(table).select("property_id").eq("id", targetId).maybeSingle();
+      : await writer.from(table).select("property_id, user_id").eq("id", targetId).maybeSingle();
 
   const propertyId =
     targetType === "review_reply"
@@ -95,10 +96,16 @@ export async function moderateContent(formData: FormData): Promise<NonNullable<M
   }
 
   if (propertyId) {
+    if (action === "approve" && targetType === "rent_report") {
+      const authorId = (row as { user_id?: string } | null)?.user_id;
+      await notifySavedWatchers({ propertyId, kind: "rent", excludeUserId: authorId });
+      await notifyContributor({ userId: authorId, kind: "rent", propertyId });
+    }
     revalidatePath(`/property/${propertyId}`);
     revalidatePath("/property/[id]", "page");
     revalidatePath("/search");
     revalidatePath("/explore");
+    revalidatePath("/today");
   }
   revalidatePath("/admin");
   revalidatePath("/admin/reviews");

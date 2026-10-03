@@ -1,11 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
   HOME_FAQS,
+  cityCanonicalPath,
+  cityFaqs,
   exploreCanonicalPath,
+  exploreCityRedirectPath,
   exploreDescription,
   exploreTitle,
   faqJsonLd,
+  itemListJsonLd,
   jsonLdString,
+  listingCanonicalPath,
+  listingIsFiltered,
+  placeSlug,
   propertyCanonicalPath,
   propertyDescription,
 } from "./seo";
@@ -22,6 +29,28 @@ describe("seo helpers", () => {
     expect(exploreCanonicalPath({ city: "Surrey", province: "BC" })).toBe(
       "/explore?city=Surrey&province=BC",
     );
+  });
+
+  it("builds city rental paths for SEO", () => {
+    expect(placeSlug("New Westminster")).toBe("new-westminster");
+    expect(placeSlug("St. John's")).toBe("st-johns");
+    expect(cityCanonicalPath({ city: "Surrey", province: "BC" })).toBe("/rentals/bc/surrey");
+    expect(listingCanonicalPath({ city: "Surrey", province: "BC" })).toBe("/rentals/bc/surrey");
+    expect(listingCanonicalPath({ province: "BC" })).toBe("/explore?province=BC");
+    expect(cityFaqs("Surrey", "BC")[0]?.question).toContain("Surrey, BC");
+    expect(itemListJsonLd({ name: "Surrey", path: "/rentals/bc/surrey", items: [] })["@type"]).toBe(
+      "ItemList",
+    );
+  });
+
+  it("redirects unfiltered city explore URLs and keeps facet variants on explore", () => {
+    expect(exploreCityRedirectPath({ city: "Surrey", province: "BC" })).toBe("/rentals/bc/surrey");
+    expect(exploreCityRedirectPath({ city: "Surrey", province: "BC", hasReviews: true })).toBeNull();
+    expect(exploreCityRedirectPath({ city: "Surrey", province: "BC", propertyType: "apartment" })).toBeNull();
+    expect(exploreCityRedirectPath({ city: "Surrey", province: "BC", q: "fraser" })).toBeNull();
+    expect(exploreCityRedirectPath({ province: "BC" })).toBeNull();
+    expect(listingIsFiltered({ hasRent: true })).toBe(true);
+    expect(listingIsFiltered({})).toBe(false);
   });
 
   it("describes a property with only published counts", () => {

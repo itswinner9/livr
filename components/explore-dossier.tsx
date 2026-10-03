@@ -8,6 +8,7 @@ import {
   type ListingFacets,
   type ListingFiltersState,
 } from "@/components/listing-ui";
+import { cityCanonicalPath } from "@/lib/seo";
 
 export function ExploreDossier({
   filters,
@@ -58,10 +59,16 @@ export function ExploreDossier({
                   return (
                     <Link
                       key={`${place.city}-${place.province}`}
-                      href={listingHref("/explore", filters, {
-                        city: active ? "" : place.city,
-                        province: active ? "" : place.province || filters.province,
-                      })}
+                      href={
+                        active
+                          ? "/explore"
+                          : place.province
+                            ? cityCanonicalPath(place)
+                            : listingHref("/explore", filters, {
+                                city: place.city,
+                                province: filters.province,
+                              })
+                      }
                       className={`flex flex-col justify-between rounded-md border p-5 ${
                         active ? "border-ink bg-surface" : "border-rule bg-surface hover:border-ink"
                       }`}

@@ -8,10 +8,39 @@ import { mapboxToken, toDraft } from "@/lib/address/provider";
 import { normalizeUnit } from "@/lib/address/normalize";
 import { findPropertyForAddress } from "@/lib/properties/queries";
 
-export const metadata: Metadata = {
-  title: "Rate a rental",
-  robots: { index: false, follow: false },
-};
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}): Promise<Metadata> {
+  const params = await searchParams;
+  const intent = (Array.isArray(params.intent) ? params.intent[0] : params.intent) === "rent" ? "rent" : "review";
+  return {
+    title: intent === "rent" ? "Report rent" : "Rate a rental",
+    robots: { index: false, follow: false },
+  };
+}
+
+function RateIntentSwitch({ intent }: { intent: "review" | "rent" }) {
+  const tab = (href: string, label: string, active: boolean) => (
+    <Link
+      href={href}
+      className={
+        active
+          ? "inline-flex min-h-11 items-center rounded-md bg-ink px-3.5 text-sm font-semibold text-paper"
+          : "inline-flex min-h-11 items-center rounded-md px-3.5 text-sm font-semibold text-mute hover:bg-muted hover:text-ink"
+      }
+    >
+      {label}
+    </Link>
+  );
+  return (
+    <div className="mt-4 flex flex-wrap gap-1 rounded-md border border-rule bg-surface p-1">
+      {tab("/rate", "Write a review", intent === "review")}
+      {tab("/rate?intent=rent", "Report rent only", intent === "rent")}
+    </div>
+  );
+}
 
 export default async function RatePage({
   searchParams,
@@ -26,7 +55,7 @@ export default async function RatePage({
   const heading = intent === "rent" ? "Report your rent" : "Rate a rental";
   const lead =
     intent === "rent"
-      ? "Search any address in Canada, then file the rent you paid."
+      ? "Search any address in Canada and file what you paid. You do not need to rate the building."
       : "Search any address in Canada, then pick it from the list.";
 
   if (!parsed.success) {
@@ -34,8 +63,9 @@ export default async function RatePage({
       <div className="mx-auto max-w-xl px-4 py-10">
         <h1 className="border-b border-rule pb-4 text-3xl font-semibold text-ink">{heading}</h1>
         <p className="mt-2 text-sm text-mute">{lead}</p>
+        <RateIntentSwitch intent={intent} />
         <div className="mt-6">
-          <AddressSearch size="md" mapToken={token} />
+          <AddressSearch size="md" mapToken={token} intent={intent} />
         </div>
         <p className="mt-6 text-sm text-mute">
           Can&apos;t find it?{" "}
@@ -72,12 +102,14 @@ export default async function RatePage({
   return (
     <div className="mx-auto max-w-xl px-4 py-10">
       <h1 className="border-b border-rule pb-4 text-3xl font-semibold text-ink">{heading}</h1>
+      <RateIntentSwitch intent={intent} />
       <div className="mt-6">
         <AddressConfirmCard
           draft={draft}
           mapToken={token}
           pending={existing?.status === "pending"}
           unit={normalizeUnit(input.unit ?? undefined)}
+          preferredIntent={intent}
         />
       </div>
       <p className="mt-6 text-sm text-mute">

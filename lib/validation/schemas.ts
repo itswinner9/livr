@@ -3,6 +3,7 @@ import { normalizePostalCode, normalizeProvince, normalizeUnit, PROVINCE_CODES }
 import { PROPERTY_TYPES } from "@/types/property";
 import { FLAG_REASONS, RENTER_STATUSES } from "@/types/database";
 import { REVIEW_SORTS } from "@/types/review";
+import { parseDateOnly } from "@/lib/daily/dates";
 
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -251,6 +252,57 @@ export const moderationDecisionSchema = z.object({
   targetId: uuid,
   decision: z.enum(["approve", "reject", "hide"]),
   reason: optionalText(500),
+});
+
+const dateOnly = (label: string) =>
+  z
+    .string()
+    .trim()
+    .refine((value) => parseDateOnly(value) !== null, `Enter a valid ${label}`);
+
+export const leaseDatesSchema = z
+  .object({
+    propertyId: z.preprocess(blankToUndefined, uuid.optional()),
+    lease_end: dateOnly("lease end date"),
+    notice_date: z.preprocess(blankToUndefined, dateOnly("notice date").optional()),
+  })
+  .refine((value) => !value.notice_date || value.notice_date <= value.lease_end, {
+    message: "Notice date should be on or before the lease end",
+    path: ["notice_date"],
+  });
+
+export const rentLogSchema = z.object({
+  propertyId: z.preprocess(blankToUndefined, uuid.optional()),
+  year: z.coerce.number().int().min(1950).max(CURRENT_YEAR + 1),
+  month: z.coerce.number().int().min(1).max(12),
+  amount: z.coerce
+    .number({ message: "Enter the rent you paid" })
+    .positive("Enter the rent you paid")
+    .max(100_000, "That rent looks too high"),
+  paid_on: z.preprocess(blankToUndefined, dateOnly("paid-on date").optional()),
+});
+
+export const homeNoteSchema = z.object({
+  propertyId: z.preprocess(blankToUndefined, uuid.optional()),
+  topic: z.enum(["noise", "repairs", "heat", "pests", "management", "other"], {
+    message: "Choose a topic",
+  }),
+  body: z.string().trim().min(1, "Write a short note").max(2000, "Keep notes under 2,000 characters"),
+});
+
+export const savedSearchSchema = z.object({
+  city: z.string().trim().min(2, "Enter a city").max(100),
+  province: z.preprocess(
+    (value) => (typeof value === "string" ? normalizeProvince(value) ?? value : value),
+    z.enum(PROVINCE_CODES, { message: "Choose a Canadian province or territory" }),
+  ),
+  property_type: z.preprocess(blankToUndefined, z.enum(PROPERTY_TYPES).optional()),
+});
+
+export const moveChecklistSchema = z.object({
+  propertyId: uuid,
+  step: z.enum(["view", "reviews", "rent", "insurance", "utilities", "keys"]),
+  done: checkbox,
 });
 
 export type FieldErrors = Record<string, string[] | undefined>;

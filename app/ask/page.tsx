@@ -3,11 +3,14 @@ import { mapboxToken } from "@/lib/address/provider";
 import { pageMetadata } from "@/lib/seo";
 import type { Metadata } from "next";
 
-export const metadata: Metadata = pageMetadata(
-  "Ask LivRank",
-  "Open a property page to ask questions grounded in that building's published renter reviews.",
-  "/ask",
-);
+export const metadata: Metadata = {
+  ...pageMetadata(
+    "Ask LivRank",
+    "Open a property page to ask questions grounded in that building's published renter reviews.",
+    "/ask",
+  ),
+  robots: { index: false, follow: true },
+};
 
 export default function AskPage() {
   return (

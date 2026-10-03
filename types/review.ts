@@ -142,6 +142,14 @@ export interface OwnPendingReply {
   created_at: string;
 }
 
+export interface ReviewPhoto {
+  id: string;
+  review_id: string;
+  storage_path: string;
+  sort_order: number;
+  url: string;
+}
+
 export type Review = RatingFields & {
   id: string;
   property_id: string;

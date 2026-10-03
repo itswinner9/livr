@@ -68,6 +68,64 @@ export function exploreCanonicalPath(filters: { city?: string; province?: string
   return query ? `/explore?${query}` : "/explore";
 }
 
+export function placeSlug(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/['’]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+export function cityCanonicalPath(filters: { city: string; province: string }) {
+  return `/rentals/${filters.province.toLowerCase()}/${placeSlug(filters.city)}`;
+}
+
+export function listingCanonicalPath(filters: { city?: string; province?: string }) {
+  if (filters.city && filters.province) return cityCanonicalPath({ city: filters.city, province: filters.province });
+  return exploreCanonicalPath(filters);
+}
+
+export function listingIsFiltered(filters: { propertyType?: string; hasReviews?: boolean; hasRent?: boolean }) {
+  return Boolean(filters.propertyType || filters.hasReviews || filters.hasRent);
+}
+
+export function exploreCityRedirectPath(filters: {
+  city?: string;
+  province?: string;
+  q?: string;
+  propertyType?: string;
+  hasReviews?: boolean;
+  hasRent?: boolean;
+}) {
+  if (filters.q || listingIsFiltered(filters) || !filters.city || !filters.province) return null;
+  return cityCanonicalPath({ city: filters.city, province: filters.province });
+}
+
+export function provinceExplorePath(province: string) {
+  return `/explore?province=${encodeURIComponent(province)}`;
+}
+
+export function cityFaqs(city: string, province: string) {
+  const place = `${city}, ${province}`;
+  return [
+    {
+      question: `How do I know a rental in ${place} before I move?`,
+      answer: `Look up the address on LivRank. If the building is on file, you can read renter-reported reviews, ratings, and rent for ${place} before you sign.`,
+    },
+    {
+      question: `Are LivRank figures for ${place} official rental records?`,
+      answer:
+        "No. Reviews and rent figures come from renters, not from a government registry or a landlord. LivRank does not claim official rental history.",
+    },
+    {
+      question: `What if my building in ${place} is not on LivRank yet?`,
+      answer: "Add it. Write a review or report what you paid so the next person can know before they move.",
+    },
+  ];
+}
+
 export function exploreHeading(filters: { city?: string; province?: string }) {
   if (filters.city && filters.province) return `Buildings on file in ${filters.city}, ${filters.province}`;
   if (filters.city) return `Buildings on file in ${filters.city}`;
@@ -266,6 +324,27 @@ export function propertyJsonLd(input: {
   }));
   if (reviewNodes.length) json.review = reviewNodes;
   return json;
+}
+
+export function itemListJsonLd(input: {
+  name: string;
+  path: string;
+  items: { name: string; path: string }[];
+}) {
+  const origin = siteOrigin();
+  return {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    name: input.name,
+    url: `${origin}${input.path}`,
+    numberOfItems: input.items.length,
+    itemListElement: input.items.map((item, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      name: item.name,
+      url: `${origin}${item.path}`,
+    })),
+  };
 }
 
 export function breadcrumbJsonLd(items: { name: string; path: string }[]) {

@@ -3,6 +3,8 @@ import { getSessionUser } from "@/lib/auth/session";
 import { getSavedProperties } from "@/lib/properties/queries";
 import { PropertyCard } from "@/components/property-card";
 import { EmptyState } from "@/components/empty-state";
+import { SetHomeForm } from "@/components/today-forms";
+import { getHomeProperty } from "@/lib/daily/queries";
 import { noIndexFollow } from "@/lib/seo";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -16,7 +18,7 @@ export const metadata: Metadata = {
 export default async function SavedPage() {
   const user = await getSessionUser();
   if (!user) redirect("/login?next=/saved");
-  const saved = await getSavedProperties(user.id);
+  const [saved, home] = await Promise.all([getSavedProperties(user.id), getHomeProperty(user.id)]);
   return (
     <AccountShell>
       <div className="bg-paper py-8">
@@ -34,13 +36,21 @@ export default async function SavedPage() {
               }
             />
           ) : (
-            <ul className="mt-6 space-y-4">
-              {saved.map((p) => (
-                <li key={p.id}>
-                  <PropertyCard property={p} />
-                </li>
-              ))}
-            </ul>
+            <>
+              <div className="mt-6 max-w-xl rounded-md border border-rule bg-surface p-4">
+                <p className="text-sm font-semibold text-ink">I live here</p>
+                <p className="mt-1 text-sm text-mute">Mark one saved building as home so Today can show your city pulse.</p>
+                <SetHomeForm saved={saved} homeId={home?.id ?? null} />
+              </div>
+              <ul className="mt-6 space-y-4">
+                {saved.map((p) => (
+                  <li key={p.id}>
+                    <PropertyCard property={p} />
+                    {home?.id === p.id ? <p className="mt-2 text-xs font-semibold text-mute">Your home</p> : null}
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
         </div>
       </div>

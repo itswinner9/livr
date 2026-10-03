@@ -11,6 +11,11 @@ import { revalidatePath } from "next/cache";
 import { track } from "@/lib/analytics";
 import { logServerError } from "@/lib/errors";
 import { normalizeUnit } from "@/lib/address/normalize";
+import {
+  REVIEW_PHOTO_BUCKET,
+  collectReviewPhotos,
+  reviewPhotoExtension,
+} from "@/lib/reviews/photos";
 
 const REVIEW_PUBLISHED = "Thanks. Your review is published.";
 const REVIEW_HELD = "Thanks. Moderators will check this before it appears publicly.";
@@ -63,6 +68,10 @@ export async function submitReview(formData: FormData): Promise<NonNullable<Revi
         fieldErrors[key] ??= issue.message;
       }
       return { error: "Please fix the highlighted fields.", fieldErrors, values };
+    }
+    const photos = collectReviewPhotos(formData);
+    if (photos.error) {
+      return { error: photos.error, fieldErrors: { photos: photos.error }, values };
     }
     const supabase = await createServerSupabase();
     if (!supabase) {
@@ -134,6 +143,35 @@ export async function submitReview(formData: FormData): Promise<NonNullable<Revi
     }
 
     const admin = createAdminClient();
+    if (photos.files.length) {
+      let uploaded = 0;
+      for (const [index, file] of photos.files.entries()) {
+        const path = `${user.id}/${inserted.id}/${crypto.randomUUID()}.${reviewPhotoExtension(file.type)}`;
+        const storage = admin ?? supabase;
+        const { error: uploadError } = await storage.storage.from(REVIEW_PHOTO_BUCKET).upload(path, file, {
+          contentType: file.type,
+          upsert: false,
+        });
+        if (uploadError) {
+          logServerError("submitReview.photo", uploadError);
+          continue;
+        }
+        const { error: rowError } = await supabase.from("review_photos").insert({
+          review_id: inserted.id,
+          user_id: user.id,
+          storage_path: path,
+          sort_order: index,
+        });
+        if (rowError) {
+          logServerError("submitReview.photoRow", rowError);
+          continue;
+        }
+        uploaded += 1;
+      }
+      if (photos.files.length && uploaded === 0) {
+        logServerError("submitReview.photos", new Error("no photos uploaded"));
+      }
+    }
     if (decision.publish && admin) {
       const published = await publishReview(admin, inserted.id, { id: user.id, action: "auto_approve" });
       if (!("error" in published)) {

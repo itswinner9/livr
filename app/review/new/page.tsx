@@ -11,9 +11,9 @@ export const metadata: Metadata = { title: "Write a review", robots: { index: fa
 export default async function NewReviewPage({
   searchParams,
 }: {
-  searchParams: Promise<{ propertyId?: string; unit?: string }>;
+  searchParams: Promise<{ propertyId?: string; unit?: string; note?: string; title?: string }>;
 }) {
-  const { propertyId, unit } = await searchParams;
+  const { propertyId, unit, note, title } = await searchParams;
   if (!propertyId) redirect("/rate");
   const user = await getSessionUser();
   const reviewPath = `/review/new?propertyId=${propertyId}${unit ? `&unit=${encodeURIComponent(unit)}` : ""}`;
@@ -33,6 +33,8 @@ export default async function NewReviewPage({
         propertyId={property.id}
         propertyHref={property.status === "active" ? `/property/${property.slug || property.id}` : undefined}
         unitLabel={unit ?? ""}
+        draftTitle={title ?? ""}
+        draftBody={note ?? ""}
       />
     </div>
   );

@@ -12,6 +12,7 @@ import {
   firstStepWithError,
   jumpToInvalidStep,
 } from "@/components/form-stepper";
+import { ReviewPhotoPicker } from "@/components/review-photo-picker";
 import { cn } from "@/lib/utils";
 
 const REQUIRED_CATEGORIES = [
@@ -47,7 +48,7 @@ const STEP_FIELDS = [
     "value_rating",
     "parking_rating",
   ],
-  ["review_title", "review_body"],
+  ["review_title", "review_body", "photos"],
   ["bedrooms", "bathrooms", "monthly_rent", "move_in_year", "move_out_year"],
 ] as const;
 
@@ -57,13 +58,19 @@ export function ReviewForm({
   propertyId,
   propertyHref,
   unitLabel = "",
+  draftTitle = "",
+  draftBody = "",
 }: {
   propertyId: string;
   propertyHref?: string;
   unitLabel?: string;
+  draftTitle?: string;
+  draftBody?: string;
 }) {
   const [state, action, pending] = useActionState<State, FormData>(async (prev, formData) => {
     const attempt = (prev?.attempt ?? 0) + 1;
+    formData.delete("photos");
+    for (const file of photosRef.current) formData.append("photos", file);
     try {
       return { ...(await submitReview(formData)), attempt };
     } catch {
@@ -72,8 +79,11 @@ export function ReviewForm({
   }, null);
   const values = state?.values ?? {};
   const errors = state?.fieldErrors ?? {};
-  const [bodyLength, setBodyLength] = useState(0);
+  const [bodyLength, setBodyLength] = useState(draftBody.length);
   const [step, setStep] = useState(1);
+  const [photos, setPhotos] = useState<File[]>([]);
+  const photosRef = useRef(photos);
+  photosRef.current = photos;
   const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
@@ -222,7 +232,7 @@ export function ReviewForm({
             required
             minLength={3}
             maxLength={150}
-            defaultValue={values.review_title}
+            defaultValue={values.review_title ?? draftTitle}
             placeholder="e.g. Quiet building, slow repairs"
             aria-invalid={Boolean(errors.review_title)}
             className={cn(
@@ -240,7 +250,7 @@ export function ReviewForm({
             minLength={MIN_BODY}
             maxLength={MAX_BODY}
             rows={8}
-            defaultValue={values.review_body}
+            defaultValue={values.review_body ?? draftBody}
             onChange={(e) => setBodyLength(e.target.value.length)}
             placeholder="Describe specific things you experienced: repairs, noise, management, pests, heating, parking…"
             aria-invalid={Boolean(errors.review_body)}
@@ -260,6 +270,7 @@ export function ReviewForm({
           </span>
           {errors.review_body ? <span className="mt-1 block text-sm text-destructive">{errors.review_body}</span> : null}
         </label>
+        <ReviewPhotoPicker files={photos} onChange={setPhotos} error={errors.photos} />
       </section>
 
       <section data-step={4} hidden={step !== 4} className="mt-5 space-y-4 rounded-md border border-rule bg-surface p-5">

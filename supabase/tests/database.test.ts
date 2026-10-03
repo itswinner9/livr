@@ -62,6 +62,8 @@ beforeAll(async () => {
   await db.exec(read("migrations/20260926000500_review_hold_flags.sql"));
   await db.exec(read("migrations/20261001000000_review_replies.sql"));
   await db.exec(read("migrations/20261001233000_staff_profile_counts.sql"));
+  await db.exec(read("migrations/20261003000000_daily_home.sql"));
+  await db.exec(read("migrations/20261004000000_review_photos.sql"));
   await db.exec(read("seed.sql"));
 }, 120_000);
 
@@ -671,5 +673,151 @@ describe("review replies", () => {
     await expect(as("anon", null, () => db.query("select * from review_replies"))).rejects.toThrow(
       /permission denied/,
     );
+  });
+});
+
+describe("daily home", () => {
+  it("keeps notes, logs, and searches private to the owner", async () => {
+    await as("authenticated", RENTER1, () =>
+      db.query(
+        `insert into saved_searches (user_id, city, province) values ($1, 'Surrey', 'BC')`,
+        [RENTER1],
+      ),
+    );
+    await as("authenticated", RENTER1, () =>
+      db.query(
+        `insert into home_notes (user_id, topic, body) values ($1, 'noise', 'Late elevator this week')`,
+        [RENTER1],
+      ),
+    );
+    const own = await as("authenticated", RENTER1, () =>
+      one<{ n: number }>("select count(*)::int n from saved_searches"),
+    );
+    const other = await as("authenticated", RENTER2, () =>
+      one<{ n: number }>("select count(*)::int n from saved_searches"),
+    );
+    const notes = await as("authenticated", RENTER2, () =>
+      one<{ n: number }>("select count(*)::int n from home_notes"),
+    );
+    expect(own.n).toBe(1);
+    expect(other.n).toBe(0);
+    expect(notes.n).toBe(0);
+    await expect(as("anon", null, () => db.query("select * from rent_logs"))).rejects.toThrow(
+      /permission denied/,
+    );
+  });
+
+  it("allows only one home building per renter", async () => {
+    await as("authenticated", RENTER4, () =>
+      db.query(`insert into saved_properties (user_id, property_id, is_home) values ($1, $2, true)`, [
+        RENTER4,
+        P3,
+      ]),
+    );
+    await expect(
+      as("authenticated", RENTER4, () =>
+        db.query(`insert into saved_properties (user_id, property_id, is_home) values ($1, $2, true)`, [
+          RENTER4,
+          P4,
+        ]),
+      ),
+    ).rejects.toThrow();
+  });
+});
+
+describe("review photos", () => {
+  const P_LIVE = "10000000-0000-4000-8000-000000000099";
+  const R_LIVE = "20000000-0000-4000-8000-000000000099";
+  const BODY = "Lived here for a year and took photos of the lobby, laundry, and a slow repair.";
+
+  it("lets a renter attach photos to their own review only", async () => {
+    await as("authenticated", RENTER1, () =>
+      db.query(
+        `insert into review_photos (review_id, user_id, storage_path, sort_order)
+         values ($1, $2, $3, 0)`,
+        [R1, RENTER1, `${RENTER1}/${R1}/lobby.jpg`],
+      ),
+    );
+    const own = await as("authenticated", RENTER1, () =>
+      one<{ n: number }>("select count(*)::int n from review_photos"),
+    );
+    const other = await as("authenticated", RENTER2, () =>
+      one<{ n: number }>("select count(*)::int n from review_photos"),
+    );
+    expect(own.n).toBeGreaterThan(0);
+    expect(other.n).toBe(0);
+    await expect(
+      as("authenticated", RENTER2, () =>
+        db.query(
+          `insert into review_photos (review_id, user_id, storage_path)
+           values ($1, $2, $3)`,
+          [R1, RENTER2, `${RENTER2}/${R1}/sneak.jpg`],
+        ),
+      ),
+    ).rejects.toThrow(/own review|permission denied|row-level/i);
+    await expect(as("anon", null, () => db.query("select * from review_photos"))).rejects.toThrow(
+      /permission denied/,
+    );
+  });
+
+  it("caps a review at four photos and hides unpublished ones", async () => {
+    await db.query(
+      `insert into properties (
+         id, address_line_1, city, province, postal_code, property_type,
+         normalized_address, normalized_city, normalized_postal_code, slug, status, is_demo
+       ) values (
+         $1, '900 Live Street', 'Surrey', 'BC', 'V3T 1A2', 'apartment',
+         '900 live street surrey bc', 'surrey', 'V3T1A2', '900-live-street-surrey-bc', 'active', false
+       )`,
+      [P_LIVE],
+    );
+    await db.query(
+      `insert into reviews (
+         id, property_id, user_id, overall_rating, maintenance_rating, management_rating,
+         noise_rating, cleanliness_rating, building_condition_rating, value_rating,
+         review_title, review_body, renter_status, status, published_at
+       ) values (
+         $1, $2, $3, 4, 4, 4, 4, 4, 4, 4,
+         'Photos of the building', $4, 'former', 'published', now()
+       )`,
+      [R_LIVE, P_LIVE, RENTER4, BODY],
+    );
+    for (let i = 0; i < 4; i += 1) {
+      await as("authenticated", RENTER4, () =>
+        db.query(
+          `insert into review_photos (review_id, user_id, storage_path, sort_order)
+           values ($1, $2, $3, $4)`,
+          [R_LIVE, RENTER4, `${RENTER4}/${R_LIVE}/shot-${i}.jpg`, i],
+        ),
+      );
+    }
+    await expect(
+      as("authenticated", RENTER4, () =>
+        db.query(
+          `insert into review_photos (review_id, user_id, storage_path, sort_order)
+           values ($1, $2, $3, 4)`,
+          [R_LIVE, RENTER4, `${RENTER4}/${R_LIVE}/shot-4.jpg`],
+        ),
+      ),
+    ).rejects.toThrow(/at most 4/i);
+
+    const published = await as("anon", null, () =>
+      one<{ n: number }>("select count(*)::int n from public_review_photos where review_id = $1", [R_LIVE]),
+    );
+    expect(published.n).toBe(4);
+
+    await as("authenticated", RENTER4, () =>
+      db.query(
+        `insert into review_photos (review_id, user_id, storage_path)
+         values ($1, $2, $3)`,
+        [R4_PENDING, RENTER4, `${RENTER4}/${R4_PENDING}/pending.jpg`],
+      ),
+    );
+    const hidden = await as("anon", null, () =>
+      one<{ n: number }>("select count(*)::int n from public_review_photos where review_id = $1", [
+        R4_PENDING,
+      ]),
+    );
+    expect(hidden.n).toBe(0);
   });
 });

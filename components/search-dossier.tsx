@@ -39,6 +39,7 @@ export function SearchDossier({
     <div className="w-full">
       <section className="bg-surface border border-rule">
         <div className="dossier-wrap py-4">
+          <h1 className="mb-4 text-2xl font-semibold text-ink">Search rental buildings in Canada</h1>
           <div className="mb-4 flex flex-col gap-2.5 md:flex-row">
             <div className="min-w-0 flex-1">
               <AddressSearch

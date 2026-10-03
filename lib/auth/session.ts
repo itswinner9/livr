@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { createServerSupabase } from "@/lib/supabase/server";
 export { isStaff } from "@/lib/auth/roles";
 
@@ -14,7 +15,7 @@ export type SessionUser = {
   };
 };
 
-export async function getSessionUser(): Promise<SessionUser | null> {
+export const getSessionUser = cache(async function getSessionUser(): Promise<SessionUser | null> {
   const supabase = await createServerSupabase();
   if (!supabase) return null;
   const {
@@ -38,4 +39,4 @@ export async function getSessionUser(): Promise<SessionUser | null> {
       subscription_status: profile?.subscription_status ?? "free",
     },
   };
-}
+});

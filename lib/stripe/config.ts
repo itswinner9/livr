@@ -19,7 +19,7 @@ export const PRICING = [
     features: [
       "Advanced comparisons (planned)",
       "Higher Ask LivRank limits",
-      "Saved search alerts (planned)",
+      "Saved searches and watch alerts",
     ],
   },
   {

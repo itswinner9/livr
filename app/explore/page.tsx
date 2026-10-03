@@ -3,13 +3,15 @@ import { redirect } from "next/navigation";
 import { ExploreDossier } from "@/components/explore-dossier";
 import { JsonLd } from "@/components/json-ld";
 import { listingHref } from "@/components/listing-ui";
-import { listingFiltersFrom, loadListingMarketplace } from "@/lib/listings/page-data";
+import { cityBuildingCount, listingFiltersFrom, loadListingMarketplace } from "@/lib/listings/page-data";
 import {
   breadcrumbJsonLd,
-  exploreCanonicalPath,
+  exploreCityRedirectPath,
   exploreDescription,
   exploreHeading,
   exploreTitle,
+  listingCanonicalPath,
+  listingIsFiltered,
   pageMetadata,
 } from "@/lib/seo";
 
@@ -20,9 +22,19 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const params = await searchParams;
   const filters = listingFiltersFrom(params);
+  const path = listingCanonicalPath(filters);
+  if (filters.q || exploreCityRedirectPath(filters)) {
+    return pageMetadata(exploreTitle(filters), exploreDescription(filters, 0), path);
+  }
   const data = await loadListingMarketplace(params, { limit: 48 });
-  const path = exploreCanonicalPath(filters);
-  return pageMetadata(exploreTitle(filters), exploreDescription(filters, data.listings.length), path);
+  const buildingCount =
+    filters.city && filters.province
+      ? cityBuildingCount(data.facets, filters.city, filters.province) || data.listings.length
+      : data.listings.length;
+  return {
+    ...pageMetadata(exploreTitle(filters), exploreDescription(filters, buildingCount), path),
+    robots: listingIsFiltered(filters) ? { index: false, follow: true } : undefined,
+  };
 }
 
 export default async function ExplorePage({
@@ -35,13 +47,15 @@ export default async function ExplorePage({
   if (filters.q) {
     redirect(listingHref("/search", filters, {}));
   }
+  const cityPath = exploreCityRedirectPath(filters);
+  if (cityPath) redirect(cityPath);
   const data = await loadListingMarketplace(params, { limit: 48 });
   return (
     <>
       <JsonLd
         data={breadcrumbJsonLd([
           { name: "Home", path: "/" },
-          { name: exploreHeading(filters), path: exploreCanonicalPath(filters) },
+          { name: exploreHeading(filters), path: listingCanonicalPath(filters) },
         ])}
       />
       <ExploreDossier filters={data.filters} facets={data.facets} listings={data.listings} />

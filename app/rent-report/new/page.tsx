@@ -27,7 +27,7 @@ export default async function NewRentReportPage({
       <h1 className="border-b border-rule pb-4 text-3xl font-semibold text-ink">Report your rent</h1>
       <ContributionHeader property={property} mapToken={mapboxToken()} />
       <p className="mt-4 text-sm text-mute">
-        Renter-reported rent. It may not represent every unit in the property.
+        Report what you paid. You do not need to rate the building. This may not represent every unit.
       </p>
       {submitted ? (
         <div className="mt-6 rounded-md border border-accent/20 bg-accent/10 p-5 text-sm text-ink" role="status">
