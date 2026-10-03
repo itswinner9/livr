@@ -47,8 +47,11 @@ function isLocalAppUrl(value: string) {
 
 export function appUrl() {
   const configured = envValue("NEXT_PUBLIC_APP_URL").replace(/\/$/, "");
-  if (process.env.NODE_ENV === "production") {
-    if (configured && !isLocalAppUrl(configured)) return configured;
+  const netlifyUrl = envValue("URL").replace(/\/$/, "");
+  const context = envValue("CONTEXT");
+  if (configured && !isLocalAppUrl(configured)) return configured;
+  if (netlifyUrl && !isLocalAppUrl(netlifyUrl) && context !== "dev") return netlifyUrl;
+  if (process.env.NODE_ENV === "production" || context === "production") {
     return "https://livrank.ca";
   }
   return configured || "http://localhost:3000";

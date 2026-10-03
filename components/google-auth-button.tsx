@@ -1,4 +1,8 @@
-import { googleStartPath } from "@/lib/auth/oauth";
+"use client";
+
+import { useState } from "react";
+import { authReturnPath, googleCallbackUrl, googleStartPath, type AuthIntent } from "@/lib/auth/oauth";
+import { createBrowserSupabase } from "@/lib/supabase/client";
 
 function GoogleMark() {
   return (
@@ -23,10 +27,35 @@ function GoogleMark() {
   );
 }
 
-export function GoogleAuthButton({ next, intent }: { next?: string; intent: "login" | "signup" }) {
+export function GoogleAuthButton({ next, intent }: { next?: string; intent: AuthIntent }) {
+  const [pending, setPending] = useState(false);
+
+  async function start(event: React.MouseEvent<HTMLAnchorElement>) {
+    const supabase = createBrowserSupabase();
+    if (!supabase) return;
+    event.preventDefault();
+    if (pending) return;
+    setPending(true);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: googleCallbackUrl(next, intent, window.location.origin),
+        queryParams: { prompt: "select_account" },
+      },
+    });
+    if (error) {
+      const fail = new URL(authReturnPath(intent), window.location.origin);
+      fail.searchParams.set("error", "google");
+      if (next) fail.searchParams.set("next", next);
+      window.location.assign(fail);
+    }
+  }
+
   return (
     <a
       href={googleStartPath(next, intent)}
+      onClick={start}
+      aria-disabled={pending}
       className="mt-6 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-md border border-rule bg-surface px-4 text-sm font-medium text-ink hover:bg-white/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
     >
       <GoogleMark />

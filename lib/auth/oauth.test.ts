@@ -3,7 +3,9 @@ import {
   authReturnPath,
   googleCallbackUrl,
   googleStartPath,
+  isAllowedOAuthUrl,
   oauthCallbackForwardPath,
+  oauthCookieOptions,
   oauthErrorMessage,
   publicRequestOrigin,
 } from "./oauth";
@@ -21,6 +23,20 @@ describe("google oauth helpers", () => {
       publicRequestOrigin(
         new Request("http://127.0.0.1/auth/google", {
           headers: { "x-forwarded-host": "livrank.ca", "x-forwarded-proto": "https" },
+        }),
+      ),
+    ).toBe("https://livrank.ca");
+    expect(
+      publicRequestOrigin(
+        new Request("http://localhost:3000/auth/google", {
+          headers: { host: "livrank.ca", "x-forwarded-proto": "https" },
+        }),
+      ),
+    ).toBe("https://livrank.ca");
+    expect(
+      publicRequestOrigin(
+        new Request("http://localhost:3000/auth/google", {
+          headers: { origin: "https://livrank.ca" },
         }),
       ),
     ).toBe("https://livrank.ca");
@@ -43,5 +59,13 @@ describe("google oauth helpers", () => {
     expect(oauthErrorMessage("google")).toMatch(/Google sign-in/);
     expect(oauthErrorMessage("auth")).toMatch(/not configured/);
     expect(oauthErrorMessage(null)).toBeNull();
+  });
+
+  it("only follows Google or Supabase OAuth URLs", () => {
+    expect(isAllowedOAuthUrl("https://ejnufckxsvsebfsrhmet.supabase.co/auth/v1/authorize")).toBe(true);
+    expect(isAllowedOAuthUrl("https://accounts.google.com/o/oauth2/v2/auth")).toBe(true);
+    expect(isAllowedOAuthUrl("https://evil.example/auth")).toBe(false);
+    expect(oauthCookieOptions("https://livrank.ca")).toEqual({ path: "/", sameSite: "lax", secure: true });
+    expect(oauthCookieOptions("http://localhost:3000").secure).toBe(false);
   });
 });

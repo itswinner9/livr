@@ -4,6 +4,7 @@ import { listListingFacets } from "@/lib/properties/queries";
 import { cityCanonicalPath } from "@/lib/seo";
 import { LivRankWordmark } from "@/components/brand-mark";
 import { CompareNavLink } from "@/components/compare-tray";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Bell, Bookmark, Plus, User } from "lucide-react";
 import Link from "next/link";
 
@@ -45,6 +46,7 @@ export async function SiteHeader() {
           ) : null}
         </nav>
         <div className="flex items-center gap-3 text-sm">
+          <ThemeToggle />
           {user ? (
             <>
               <Link
@@ -150,6 +152,12 @@ export async function SiteHeader() {
                   Manager
                 </Link>
               ) : null}
+              <div className="border-t border-rule px-3 py-1">
+                <ThemeToggle
+                  showLabel
+                  className="inline-flex min-h-11 items-center gap-2 text-mute hover:text-ink"
+                />
+              </div>
             </div>
           </details>
         </div>

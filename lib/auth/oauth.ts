@@ -8,12 +8,29 @@ function isLocalHost(host: string) {
   return name === "localhost" || name === "127.0.0.1" || name === "::1" || name.endsWith(".local");
 }
 
+function headerHost(request: Request, name: string) {
+  return request.headers.get(name)?.split(",")[0]?.trim() || "";
+}
+
+function originFromHost(host: string, proto: string) {
+  return `${proto}://${host}`;
+}
+
 export function publicRequestOrigin(request: Request) {
-  const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
-  const forwardedProto = request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
-  if (forwardedHost && !isLocalHost(forwardedHost)) {
-    const proto = forwardedProto === "http" ? "http" : "https";
-    return `${proto}://${forwardedHost}`;
+  const forwardedProto = headerHost(request, "x-forwarded-proto");
+  const proto = forwardedProto === "http" ? "http" : "https";
+  for (const host of [headerHost(request, "x-forwarded-host"), headerHost(request, "host")]) {
+    if (host && !isLocalHost(host)) return originFromHost(host, proto);
+  }
+  for (const name of ["origin", "referer"] as const) {
+    const raw = request.headers.get(name);
+    if (!raw) continue;
+    try {
+      const parsed = new URL(raw);
+      if (!isLocalHost(parsed.hostname)) return parsed.origin;
+    } catch {
+      /* ignore invalid header */
+    }
   }
   const url = new URL(request.url);
   if (!isLocalHost(url.hostname)) return url.origin;
@@ -24,6 +41,24 @@ export function publicRequestOrigin(request: Request) {
     /* keep the request origin */
   }
   return url.origin;
+}
+
+export function isAllowedOAuthUrl(url: string) {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "https:") return false;
+    return parsed.hostname.endsWith(".supabase.co") || parsed.hostname === "accounts.google.com";
+  } catch {
+    return false;
+  }
+}
+
+export function oauthCookieOptions(origin: string) {
+  return {
+    path: "/",
+    sameSite: "lax" as const,
+    secure: origin.startsWith("https://"),
+  };
 }
 
 export function googleStartPath(next?: string | null, intent: AuthIntent = "login") {

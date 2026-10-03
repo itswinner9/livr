@@ -1,6 +1,45 @@
 @import "tailwindcss";
 
-:root {
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root,
+html.light {
+  color-scheme: light;
+  --paper: #f7f4ef;
+  --ink: #161513;
+  --mute: #6b6760;
+  --rule: #ddd6cc;
+  --surface: #fffdf9;
+  --accent: #134e4a;
+  --accent-hover: #0f3f3c;
+  --accent-soft: #efeae2;
+  --star: #c4a35a;
+  --star-dim: #e8dcc4;
+  --score-good: var(--star);
+  --score-warn: #6b6760;
+  --destructive: #9f1d1d;
+
+  --background: var(--paper);
+  --foreground: var(--ink);
+  --card: var(--surface);
+  --card-foreground: var(--ink);
+  --popover: var(--surface);
+  --popover-foreground: var(--ink);
+  --primary: var(--accent);
+  --primary-foreground: #fffdf9;
+  --secondary: #efeae2;
+  --secondary-foreground: var(--ink);
+  --muted: #efeae2;
+  --muted-foreground: var(--mute);
+  --accent-foreground: var(--accent);
+  --border: var(--rule);
+  --input: #ddd6cc;
+  --ring: #134e4a;
+  --radius: 0.25rem;
+}
+
+html.dark {
+  color-scheme: dark;
   --paper: #0a0a0a;
   --ink: #f5f5f5;
   --mute: #8a8a8a;
@@ -31,7 +70,6 @@
   --border: var(--rule);
   --input: #2a2a2a;
   --ring: #f5f5f5;
-  --radius: 0.25rem;
 }
 
 @theme inline {
