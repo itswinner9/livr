@@ -72,7 +72,8 @@ export function googleStartPath(next?: string | null, intent: AuthIntent = "logi
 
 export function googleCallbackUrl(next?: string | null, intent: AuthIntent = "login", origin = appUrl()) {
   const params = new URLSearchParams();
-  params.set("next", safeNextPath(next));
+  // Supabase treats `next` as its own post-auth path, which sent people to /account?code=.
+  params.set("return", safeAuthReturnPath(next));
   if (intent === "signup") params.set("intent", "signup");
   return `${origin.replace(/\/$/, "")}/auth/callback?${params.toString()}`;
 }
@@ -83,9 +84,20 @@ export function authReturnPath(intent: AuthIntent | string | null | undefined) {
 
 const AUTH_CODE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+function normalizePath(pathname: string) {
+  if (pathname.length > 1 && pathname.endsWith("/")) return pathname.slice(0, -1);
+  return pathname;
+}
+
+export function safeAuthReturnPath(value: unknown) {
+  const path = safeNextPath(value).split("?")[0].split("#")[0];
+  if (path === "/login" || path === "/signup" || path.startsWith("/auth/")) return "/account";
+  return path || "/account";
+}
+
 /** When Site URL is the homepage, Google still lands with ?code= — send it to the callback. */
 export function oauthCallbackForwardPath(pathname: string, searchParams: URLSearchParams) {
-  if (pathname === "/auth/callback") return null;
+  if (normalizePath(pathname) === "/auth/callback") return null;
   const code = searchParams.get("code");
   const hasAuthError =
     searchParams.has("error") &&
@@ -93,10 +105,44 @@ export function oauthCallbackForwardPath(pathname: string, searchParams: URLSear
   if (!hasAuthError && !(code && AUTH_CODE.test(code))) return null;
   const next = new URLSearchParams();
   if (code && AUTH_CODE.test(code)) next.set("code", code);
-  next.set("next", safeNextPath(searchParams.get("next")));
+  next.set("return", safeAuthReturnPath(searchParams.get("return") ?? searchParams.get("next")));
   const intent = searchParams.get("intent");
   if (intent === "signup" || intent === "login") next.set("intent", intent);
   return `/auth/callback?${next.toString()}`;
+}
+
+export function oauthFinishRedirect(
+  pathname: string,
+  raw: Record<string, string | string[] | undefined>,
+) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(raw)) {
+    if (typeof value === "string") params.set(key, value);
+  }
+  const finish = oauthCallbackForwardPath(pathname, params);
+  // #region agent log
+  if (params.has("code") || finish) {
+    fetch("http://127.0.0.1:7857/ingest/eee90640-482f-42c8-8954-1cebbcfb48fe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "2a4cb8" },
+      body: JSON.stringify({
+        sessionId: "2a4cb8",
+        hypothesisId: "H2",
+        location: "lib/auth/oauth.ts:oauthFinishRedirect",
+        message: "page oauth finish",
+        data: {
+          pathname,
+          hasCode: params.has("code"),
+          next: params.get("next"),
+          returnTo: params.get("return"),
+          finish,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+  }
+  // #endregion
+  return finish;
 }
 
 export function oauthErrorMessage(code?: string | null) {

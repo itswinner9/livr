@@ -19,9 +19,10 @@ export const metadata: Metadata = {
 export default async function SignupPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string; error?: string }>;
+  searchParams: Promise<{ next?: string; error?: string; code?: string; return?: string; intent?: string }>;
 }) {
-  const { next: rawNext, error: rawError } = await searchParams;
+  const raw = await searchParams;
+  const { next: rawNext, error: rawError } = raw;
   const next = rawNext ? safeNextPath(rawNext) : undefined;
   const oauthError = oauthErrorMessage(rawError);
   return (
