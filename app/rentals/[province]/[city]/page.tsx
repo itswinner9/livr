@@ -72,7 +72,9 @@ export default async function CityPage({
           cityFaqs(
             place.city,
             place.province,
-            data.listings.map((row) => propertyDisplayName(row.property)),
+            data.listings
+              .filter((row) => row.property.review_count > 0)
+              .map((row) => propertyDisplayName(row.property)),
           ),
         )}
       />

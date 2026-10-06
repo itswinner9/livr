@@ -15,9 +15,9 @@ export function CityDossier({
   facets?: ListingFacets;
   loggedIn: boolean;
 }) {
-  const buildingNames = listings.map((row) => displayName(row.property));
-  const faqs = cityFaqs(city, province, buildingNames);
-  const featured = listings.slice(0, 8);
+  const reviewed = listings.filter((row) => row.property.review_count > 0);
+  const faqs = cityFaqs(city, province, reviewed.map((row) => displayName(row.property)));
+  const featured = reviewed.slice(0, 8);
   return (
     <div className="w-full">
       <section className="border-b border-rule bg-paper py-10 md:py-14">
