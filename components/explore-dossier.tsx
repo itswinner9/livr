@@ -8,7 +8,7 @@ import {
   type ListingFacets,
   type ListingFiltersState,
 } from "@/components/listing-ui";
-import { cityCanonicalPath } from "@/lib/seo";
+import { cityCanonicalPath, exploreHeading } from "@/lib/seo";
 
 export function ExploreDossier({
   filters,
@@ -24,13 +24,10 @@ export function ExploreDossier({
       <section className="border-b border-rule bg-paper py-10 md:py-14">
         <div className="dossier-wrap">
           <h1 className="text-3xl font-semibold text-ink md:text-4xl">
-            {filters.city && filters.province
-              ? `Buildings on file in ${filters.city}, ${filters.province}`
-              : filters.city
-                ? `Buildings on file in ${filters.city}`
-                : filters.province
-                  ? `Buildings on file in ${filters.province}`
-                  : "Buildings on file"}
+            {exploreHeading({
+              city: filters.city || undefined,
+              province: filters.province || undefined,
+            })}
           </h1>
           <p className="mt-3 max-w-xl text-base text-mute">
             {filters.city

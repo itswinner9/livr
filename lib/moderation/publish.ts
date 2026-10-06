@@ -2,10 +2,33 @@ import "server-only";
 
 import { processPublishedReview } from "@/lib/actions/ai";
 import { generatePropertySummary } from "@/lib/ai/provider";
+import { refreshListings } from "@/lib/cache/listings";
 import { notifyContributor, notifySavedWatchers } from "@/lib/notifications/watch";
+import { cityCanonicalPath, propertyCanonicalPath } from "@/lib/seo";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
+
+async function revalidatePropertySurfaces(propertyId: string) {
+  refreshListings();
+  revalidatePath(`/property/${propertyId}`);
+  revalidatePath("/property/[id]", "page");
+  revalidatePath("/search");
+  revalidatePath("/today");
+  revalidatePath("/explore");
+  const admin = createAdminClient();
+  if (!admin) return;
+  const { data } = await admin
+    .from("properties")
+    .select("id, slug, city, province")
+    .eq("id", propertyId)
+    .maybeSingle();
+  if (!data) return;
+  revalidatePath(propertyCanonicalPath(data));
+  if (data.city && data.province) {
+    revalidatePath(cityCanonicalPath({ city: data.city, province: data.province }));
+  }
+}
 
 export type PublishActor = {
   id: string;
@@ -98,10 +121,7 @@ export async function publishReview(
       excludeUserId: row.user_id,
     });
     await notifyContributor({ userId: row.user_id, kind: "review", propertyId: row.property_id });
-    revalidatePath(`/property/${row.property_id}`);
-    revalidatePath("/property/[id]", "page");
-    revalidatePath("/search");
-    revalidatePath("/today");
+    await revalidatePropertySurfaces(row.property_id);
   }
   revalidatePath("/admin");
   revalidatePath("/admin/reviews");
@@ -154,8 +174,7 @@ export async function publishReply(
     row.reviews as { property_id: string } | { property_id: string }[] | null,
   );
   if (propertyId) {
-    revalidatePath(`/property/${propertyId}`);
-    revalidatePath("/property/[id]", "page");
+    await revalidatePropertySurfaces(propertyId);
   }
   revalidatePath("/admin");
   revalidatePath("/admin/reviews");

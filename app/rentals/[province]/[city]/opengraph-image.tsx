@@ -18,7 +18,7 @@ export default async function Image({
   const place = await resolveCityPlace(province, city);
   if (!place) {
     return new ImageResponse(
-      <OgFrame kicker="LivRank" title="Rental buildings" detail="Renter-reported reviews and rent." />,
+      <OgFrame kicker="LivRank" title="Building reviews" detail="Renter-reported reviews and rent." />,
       { ...OG_SIZE },
     );
   }

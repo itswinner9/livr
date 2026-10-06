@@ -67,7 +67,15 @@ export default async function CityPage({
           })),
         })}
       />
-      <JsonLd data={faqJsonLd(cityFaqs(place.city, place.province))} />
+      <JsonLd
+        data={faqJsonLd(
+          cityFaqs(
+            place.city,
+            place.province,
+            data.listings.map((row) => propertyDisplayName(row.property)),
+          ),
+        )}
+      />
       <CityDossier
         city={place.city}
         province={place.province}

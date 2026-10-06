@@ -4,7 +4,7 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import { cityCanonicalPath, siteOrigin } from "@/lib/seo";
 import type { MetadataRoute } from "next";
 
-export const revalidate = 3600;
+export const revalidate = 300;
 
 function laterDate(left?: string | null, right?: string | null) {
   if (!left) return right ?? undefined;
