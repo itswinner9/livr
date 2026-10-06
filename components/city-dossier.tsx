@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { DossierCard, type ListingCardModel, type ListingFacets } from "@/components/listing-ui";
+import { DossierCard, displayName, propertyHref, type ListingCardModel, type ListingFacets } from "@/components/listing-ui";
 import { SavedSearchForm } from "@/components/today-forms";
 import { cityCanonicalPath, cityFaqs, exploreHeading, provinceExplorePath, provinceLabel } from "@/lib/seo";
 
@@ -15,7 +15,9 @@ export function CityDossier({
   facets?: ListingFacets;
   loggedIn: boolean;
 }) {
-  const faqs = cityFaqs(city, province);
+  const buildingNames = listings.map((row) => displayName(row.property));
+  const faqs = cityFaqs(city, province, buildingNames);
+  const featured = listings.slice(0, 8);
   return (
     <div className="w-full">
       <section className="border-b border-rule bg-paper py-10 md:py-14">
@@ -34,8 +36,23 @@ export function CityDossier({
           <h1 className="mt-4 text-3xl font-semibold text-ink md:text-4xl">
             {exploreHeading({ city, province })}
           </h1>
-          <p className="mt-3 max-w-xl text-base text-mute">
+          <p className="mt-3 max-w-2xl text-base text-mute">
             Know before you move. Renter-reported reviews and rent in {city}, {province} — not official records.
+            {featured.length > 0 ? (
+              <>
+                {" "}
+                On file:{" "}
+                {featured.map((row, index) => (
+                  <span key={row.property.id}>
+                    {index > 0 ? (featured.length === 2 ? " and " : index === featured.length - 1 ? ", and " : ", ") : null}
+                    <Link href={propertyHref(row.property)} className="font-semibold text-ink hover:text-accent">
+                      {displayName(row.property)}
+                    </Link>
+                  </span>
+                ))}
+                .
+              </>
+            ) : null}
           </p>
           {loggedIn ? (
             <div className="mt-6 max-w-xl rounded-md border border-rule bg-surface p-4">

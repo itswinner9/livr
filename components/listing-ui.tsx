@@ -180,7 +180,7 @@ export function DossierCard({ row }: { row: ListingCardModel }) {
           )}
         </span>
         <Link href={propertyHref(p)} className="font-semibold text-accent hover:text-accent-hover">
-          View building
+          Read reviews
         </Link>
       </div>
       <div className="mt-3">

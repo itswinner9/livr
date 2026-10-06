@@ -52,8 +52,14 @@ export function propertyDisplayName(property: Pick<Property, "building_name" | "
   return property.building_name?.replace(/\s*\(Demo\)\s*/gi, "").trim() || property.address_line_1;
 }
 
-export function propertyTitle(property: Pick<Property, "address_line_1" | "city" | "province">) {
-  return `${property.address_line_1}, ${property.city} ${property.province}`;
+export function propertyTitle(
+  property: Pick<Property, "building_name" | "address_line_1" | "city" | "province">,
+) {
+  return `${propertyDisplayName(property)} reviews in ${property.city}, ${property.province}`;
+}
+
+export function propertyOgImagePath(property: Pick<Property, "slug" | "id">) {
+  return `${propertyCanonicalPath(property)}/opengraph-image`;
 }
 
 export function propertyCanonicalPath(property: Pick<Property, "slug" | "id">) {
@@ -107,9 +113,18 @@ export function provinceExplorePath(province: string) {
   return `/explore?province=${encodeURIComponent(province)}`;
 }
 
-export function cityFaqs(city: string, province: string) {
+export function listedNames(names: string[], limit = 8) {
+  const slice = names.map((name) => name.trim()).filter(Boolean).slice(0, limit);
+  if (slice.length === 0) return "";
+  if (slice.length === 1) return slice[0]!;
+  if (slice.length === 2) return `${slice[0]} and ${slice[1]}`;
+  return `${slice.slice(0, -1).join(", ")}, and ${slice[slice.length - 1]}`;
+}
+
+export function cityFaqs(city: string, province: string, buildingNames: string[] = []) {
   const place = `${city}, ${province}`;
-  return [
+  const named = listedNames(buildingNames);
+  const faqs = [
     {
       question: `How do I know a rental in ${place} before I move?`,
       answer: `Look up the address on LivRank. If the building is on file, you can read renter-reported reviews, ratings, and rent for ${place} before you sign.`,
@@ -124,22 +139,61 @@ export function cityFaqs(city: string, province: string) {
       answer: "Add it. Write a review or report what you paid so the next person can know before they move.",
     },
   ];
+  if (named) {
+    faqs.splice(1, 0, {
+      question: `Which ${city} buildings have renter reviews on LivRank?`,
+      answer: `Buildings on file include ${named}. Open a building page to read the published renter reviews.`,
+    });
+  }
+  return faqs;
+}
+
+export function propertyFaqs(
+  property: Pick<Property, "building_name" | "address_line_1" | "city" | "province" | "postal_code">,
+  stats: { reviewCount: number; rating: number | null },
+) {
+  const name = propertyDisplayName(property);
+  const where = [property.address_line_1, property.city, property.province, property.postal_code]
+    .filter(Boolean)
+    .join(", ");
+  const reviewsLabel = `${stats.reviewCount} published renter ${stats.reviewCount === 1 ? "review" : "reviews"}`;
+  const say =
+    stats.reviewCount > 0
+      ? stats.rating != null && stats.reviewCount >= MIN_REVIEWS_FOR_RATING
+        ? `${reviewsLabel}, average ${stats.rating.toFixed(1)} out of 5. Read the reviews on this page.`
+        : `${reviewsLabel}. Read the reviews on this page.`
+      : `No published renter reviews yet. Be the first to write one on this page.`;
+  return [
+    {
+      question: `What do renters say about ${name}?`,
+      answer: say,
+    },
+    {
+      question: `Where is ${name}?`,
+      answer: `${name} is at ${where}.`,
+    },
+    {
+      question: `Are LivRank reviews of ${name} official rental records?`,
+      answer:
+        "No. Reviews and rent figures come from renters, not from a government registry or a landlord. LivRank does not claim official rental history.",
+    },
+  ];
 }
 
 export function exploreHeading(filters: { city?: string; province?: string }) {
-  if (filters.city && filters.province) return `Buildings on file in ${filters.city}, ${filters.province}`;
-  if (filters.city) return `Buildings on file in ${filters.city}`;
-  if (filters.province) return `Buildings on file in ${provinceLabel(filters.province)}`;
-  return "Buildings on file";
+  if (filters.city && filters.province) return `Building reviews in ${filters.city}, ${filters.province}`;
+  if (filters.city) return `Building reviews in ${filters.city}`;
+  if (filters.province) return `Building reviews in ${provinceLabel(filters.province)}`;
+  return "Building reviews";
 }
 
 export function exploreTitle(filters: { city?: string; province?: string }) {
   if (filters.city && filters.province) {
-    return `Rental buildings in ${filters.city}, ${filters.province}`;
+    return `Renter reviews of buildings in ${filters.city}, ${filters.province}`;
   }
-  if (filters.city) return `Rental buildings in ${filters.city}`;
-  if (filters.province) return `Rental buildings in ${provinceLabel(filters.province)}`;
-  return "Explore rental buildings in Canada";
+  if (filters.city) return `Renter reviews of buildings in ${filters.city}`;
+  if (filters.province) return `Renter reviews of buildings in ${provinceLabel(filters.province)}`;
+  return "Explore rental building reviews in Canada";
 }
 
 export function exploreDescription(
@@ -157,27 +211,28 @@ export function exploreDescription(
     buildingCount > 0
       ? `${buildingCount} ${buildingCount === 1 ? "building" : "buildings"} on file. `
       : "";
-  return `${count}Know before you move. Read renter-reported reviews and rent for buildings in ${place} before you sign. LivRank does not claim official rental history.`;
+  return `${count}Read renter reviews of buildings in ${place} before you sign. LivRank does not claim official rental history.`;
 }
 
 export function propertyDescription(input: {
-  property: Pick<Property, "address_line_1" | "city" | "province" | "rent_report_count">;
+  property: Pick<Property, "building_name" | "address_line_1" | "city" | "province" | "rent_report_count">;
   reviewCount: number;
   rating: number | null;
 }) {
   const { property, reviewCount, rating } = input;
-  const bits: string[] = [];
-  if (reviewCount > 0) {
-    bits.push(`${reviewCount} renter ${reviewCount === 1 ? "review" : "reviews"}`);
+  const name = propertyDisplayName(property);
+  const place =
+    name === property.address_line_1
+      ? `in ${property.city}, ${property.province}`
+      : `at ${property.address_line_1}, ${property.city}, ${property.province}`;
+  if (reviewCount < 1) {
+    return `No published ratings yet for ${name} ${place}. Read renter reports before you move in. LivRank does not claim official rental history.`;
   }
-  if (rating != null && reviewCount >= MIN_REVIEWS_FOR_RATING) {
-    bits.push(`average ${rating.toFixed(1)} out of 5`);
-  }
-  if (property.rent_report_count > 0) bits.push("renter-reported rent on file");
-  const facts = bits.length
-    ? `${bits.join(", ").replace(/^./, (letter) => letter.toUpperCase())}. `
-    : "No published ratings yet. ";
-  return `Renter-reported file for ${property.address_line_1} in ${property.city}, ${property.province}. ${facts}Read renter reports before you move in. LivRank does not claim official rental history.`;
+  const reviewBit = `Read ${reviewCount} renter ${reviewCount === 1 ? "review" : "reviews"} of ${name} ${place}.`;
+  const ratingBit =
+    rating != null && reviewCount >= MIN_REVIEWS_FOR_RATING ? ` Average ${rating.toFixed(1)} out of 5.` : "";
+  const rentBit = property.rent_report_count > 0 ? " Renter-reported rent on file." : "";
+  return `${reviewBit}${ratingBit}${rentBit} LivRank does not claim official rental history.`;
 }
 
 export function openGraphShare(
@@ -241,16 +296,16 @@ export function websiteJsonLd() {
 }
 
 function schemaTypeForProperty(property: Property) {
-  if (property.property_type === "house") return "House";
+  if (property.property_type === "house") return ["LocalBusiness", "House"];
   if (
     property.property_type === "townhouse" ||
     property.property_type === "duplex" ||
     property.property_type === "triplex" ||
     property.property_type === "fourplex"
   ) {
-    return "Residence";
+    return ["LocalBusiness", "Residence"];
   }
-  return "ApartmentComplex";
+  return ["LocalBusiness", "ApartmentComplex"];
 }
 
 export function propertyJsonLd(input: {
@@ -277,6 +332,7 @@ export function propertyJsonLd(input: {
     "@type": type,
     name,
     url,
+    image: `${origin}${propertyOgImagePath(property)}`,
     description: propertyDescription({ property, reviewCount, rating }),
     address: {
       "@type": "PostalAddress",
@@ -287,6 +343,10 @@ export function propertyJsonLd(input: {
       addressCountry: "CA",
     },
   };
+  const named = property.building_name?.replace(/\s*\(Demo\)\s*/gi, "").trim();
+  if (named && named !== property.address_line_1) {
+    json.alternateName = property.address_line_1;
+  }
   if (property.property_type) {
     json.additionalType = PROPERTY_TYPE_LABELS[property.property_type];
   }

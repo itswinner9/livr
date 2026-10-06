@@ -2,7 +2,7 @@ import { ImageResponse } from "next/og";
 import { OgFrame, OG_SIZE } from "@/lib/og-frame";
 import { getPropertyById } from "@/lib/properties/queries";
 import { MIN_REVIEWS_FOR_RATING } from "@/lib/ratings/aggregate";
-import { propertyTitle } from "@/lib/seo";
+import { propertyDisplayName } from "@/lib/seo";
 
 export const alt = "LivRank building file";
 export const size = OG_SIZE;
@@ -29,7 +29,7 @@ export default async function Image({ params }: { params: Promise<{ id: string }
     (
       <OgFrame
         kicker={`${property.city}, ${property.province}`}
-        title={propertyTitle(property)}
+        title={propertyDisplayName(property)}
         detail={reviewLabel}
         score={rating}
       />

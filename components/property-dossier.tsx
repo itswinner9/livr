@@ -16,7 +16,7 @@ import { Stars } from "@/components/stars";
 import { itemFromProperty } from "@/lib/compare/ids";
 import { MIN_REVIEWS_FOR_RATING } from "@/lib/ratings/aggregate";
 import { verbatimReviewQuotes } from "@/lib/reviews/quotes";
-import { cityCanonicalPath, provinceExplorePath, provinceLabel } from "@/lib/seo";
+import { cityCanonicalPath, propertyDisplayName, propertyFaqs, provinceExplorePath, provinceLabel } from "@/lib/seo";
 import { formatCad, formatDate, cn } from "@/lib/utils";
 import { PROPERTY_TYPE_LABELS, type IssueMention, type Property, type RatingSummary, type RentHistoryGroup } from "@/types/property";
 import type { OwnPendingReply, PublicReviewReply, Review, ReviewPhoto } from "@/types/review";
@@ -125,8 +125,14 @@ export function PropertyDossier({
     { id: "rent", label: "Rent" },
     { id: "reviews", label: `Reviews (${ratingSummary.reviewCount})` },
     { id: "history", label: "History" },
+    { id: "faqs", label: "FAQs" },
     { id: "ask", label: "Ask" },
   ];
+  const ratingForFaqs =
+    ratingSummary.overall != null && ratingSummary.reviewCount >= MIN_REVIEWS_FOR_RATING
+      ? ratingSummary.overall
+      : null;
+  const faqs = propertyFaqs(property, { reviewCount: ratingSummary.reviewCount, rating: ratingForFaqs });
 
   return (
     <div className="w-full">
@@ -432,6 +438,22 @@ export function PropertyDossier({
         </div>
       </section>
 
+      <section id="faqs" className="scroll-mt-32 bg-paper pb-10" aria-labelledby="property-faqs">
+        <div className="dossier-wrap max-w-3xl">
+          <h2 id="property-faqs" className="text-2xl font-bold tracking-tight text-ink">
+            Before you move to {heading}
+          </h2>
+          <dl className="mt-8 space-y-8">
+            {faqs.map((faq) => (
+              <div key={faq.question}>
+                <dt className="text-lg font-semibold text-ink">{faq.question}</dt>
+                <dd className="mt-2 text-sm leading-7 text-mute">{faq.answer}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      </section>
+
       <section id="ask" className="scroll-mt-32 bg-paper pb-10">
         <div className="dossier-wrap">
           <AskLivRank propertyId={property.id} />
@@ -446,7 +468,7 @@ export function PropertyDossier({
               {nearby.map((row) => (
                 <li key={row.id}>
                   <Link href={`/property/${row.slug || row.id}`} className="block rounded-md bg-surface p-4 border border-rule hover:text-accent">
-                    <span className="block font-semibold text-ink">{row.address_line_1}</span>
+                    <span className="block font-semibold text-ink">{propertyDisplayName(row)}</span>
                     <span className="mt-1 block text-sm text-mute">
                       {row.review_count} {row.review_count === 1 ? "review" : "reviews"}
                       {row.last_review_date ? ` · updated ${formatDate(row.last_review_date)}` : ""}

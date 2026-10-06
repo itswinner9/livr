@@ -17,7 +17,10 @@ import { getSessionUser } from "@/lib/auth/session";
 import {
   breadcrumbJsonLd,
   cityCanonicalPath,
+  faqJsonLd,
   pageMetadata,
+  propertyDisplayName,
+  propertyFaqs,
   provinceExplorePath,
   provinceLabel,
   propertyCanonicalPath,
@@ -102,9 +105,10 @@ export default async function PropertyPage({
           { name: "Home", path: "/" },
           { name: provinceLabel(property.province), path: provinceExplorePath(property.province) },
           { name: property.city, path: cityPath },
-          { name: property.address_line_1, path: propertyCanonicalPath(property) },
+          { name: propertyDisplayName(property), path: propertyCanonicalPath(property) },
         ])}
       />
+      <JsonLd data={faqJsonLd(propertyFaqs(property, { reviewCount: ratingSummary.reviewCount, rating }))} />
       <PropertyDossier
         property={property}
         ratingSummary={ratingSummary}
