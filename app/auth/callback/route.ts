@@ -28,7 +28,10 @@ export async function GET(request: NextRequest) {
   const { error } = flowId
     ? await supabase.auth.exchangeCodeForSession(code, { flowId })
     : await supabase.auth.exchangeCodeForSession(code);
-  if (error) return redirectWithCookies(failUrl(request, next, intent), jar, origin);
+  if (error) {
+    const { data } = await supabase.auth.getUser();
+    if (!data.user) return redirectWithCookies(failUrl(request, next, intent), jar, origin);
+  }
 
   return redirectWithCookies(new URL(next, `${origin}/`), jar, origin);
 }
