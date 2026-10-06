@@ -13,7 +13,7 @@ function failUrl(request: NextRequest, next: string, intent: string | null, code
 }
 
 export async function GET(request: NextRequest) {
-  const next = safeNextPath(request.nextUrl.searchParams.get("next"));
+  const next = safeNextPath(request.nextUrl.searchParams.get("return") ?? request.nextUrl.searchParams.get("next"));
   const intent = request.nextUrl.searchParams.get("intent");
   const code = request.nextUrl.searchParams.get("code");
   const flowId = request.nextUrl.searchParams.get("sb_flow_id");

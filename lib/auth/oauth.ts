@@ -72,7 +72,8 @@ export function googleStartPath(next?: string | null, intent: AuthIntent = "logi
 
 export function googleCallbackUrl(next?: string | null, intent: AuthIntent = "login", origin = appUrl()) {
   const params = new URLSearchParams();
-  params.set("next", safeNextPath(next));
+  // Supabase treats `next` as its own post-auth path, which sent people to /account?code=.
+  params.set("return", safeNextPath(next));
   if (intent === "signup") params.set("intent", "signup");
   return `${origin.replace(/\/$/, "")}/auth/callback?${params.toString()}`;
 }
@@ -93,10 +94,21 @@ export function oauthCallbackForwardPath(pathname: string, searchParams: URLSear
   if (!hasAuthError && !(code && AUTH_CODE.test(code))) return null;
   const next = new URLSearchParams();
   if (code && AUTH_CODE.test(code)) next.set("code", code);
-  next.set("next", safeNextPath(searchParams.get("next")));
+  next.set("return", safeNextPath(searchParams.get("return") ?? searchParams.get("next")));
   const intent = searchParams.get("intent");
   if (intent === "signup" || intent === "login") next.set("intent", intent);
   return `/auth/callback?${next.toString()}`;
+}
+
+export function oauthFinishRedirect(
+  pathname: string,
+  raw: Record<string, string | string[] | undefined>,
+) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(raw)) {
+    if (typeof value === "string") params.set(key, value);
+  }
+  return oauthCallbackForwardPath(pathname, params);
 }
 
 export function oauthErrorMessage(code?: string | null) {
