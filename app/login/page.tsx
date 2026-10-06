@@ -3,13 +3,12 @@ import { AuthDivider, GoogleAuthButton } from "@/components/google-auth-button";
 import { PageHeading, PageShell } from "@/components/page-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { oauthErrorMessage, oauthFinishRedirect } from "@/lib/auth/oauth";
+import { oauthErrorMessage } from "@/lib/auth/oauth";
 import { resetPasswordForm } from "@/lib/actions/forms";
 import { safeNextPath } from "@/lib/safe-redirect";
 import { noIndexFollow, pageMetadata } from "@/lib/seo";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { redirect } from "next/navigation";
 
 export const metadata: Metadata = {
   ...pageMetadata("Log in", "Log in with Google or email to rate a building or manage your LivRank account.", "/login"),
@@ -22,8 +21,6 @@ export default async function LoginPage({
   searchParams: Promise<{ next?: string; error?: string; code?: string; return?: string; intent?: string }>;
 }) {
   const raw = await searchParams;
-  const finish = oauthFinishRedirect("/login", raw);
-  if (finish) redirect(finish);
   const { next: rawNext, error: rawError } = raw;
   const next = rawNext ? safeNextPath(rawNext) : undefined;
   const oauthError = oauthErrorMessage(rawError);

@@ -18,6 +18,7 @@ describe("google oauth helpers", () => {
     expect(googleCallbackUrl("/admin", "login", "https://livrank.ca")).toBe(
       "https://livrank.ca/auth/callback?return=%2Fadmin",
     );
+    expect(googleCallbackUrl("/auth/callback", "login", "https://livrank.ca")).toContain("return=%2Faccount");
     expect(googleCallbackUrl("//evil.example", "login", "https://livrank.ca")).toContain("return=%2Faccount");
     expect(
       publicRequestOrigin(
@@ -58,6 +59,13 @@ describe("google oauth helpers", () => {
       ),
     ).toBe("/auth/callback?code=6c2ece1a-c652-4417-9780-2ffac012756a&return=%2Faccount&intent=signup");
     expect(oauthCallbackForwardPath("/auth/callback", new URLSearchParams("code=88007ada-b6b0-4dbe-89c2-3cf49e174cb6"))).toBeNull();
+    expect(oauthCallbackForwardPath("/auth/callback/", new URLSearchParams("code=88007ada-b6b0-4dbe-89c2-3cf49e174cb6"))).toBeNull();
+    expect(
+      oauthCallbackForwardPath(
+        "/account",
+        new URLSearchParams("code=88007ada-b6b0-4dbe-89c2-3cf49e174cb6&next=%2Fauth%2Fcallback"),
+      ),
+    ).toBe("/auth/callback?code=88007ada-b6b0-4dbe-89c2-3cf49e174cb6&return=%2Faccount");
     expect(oauthCallbackForwardPath("/", new URLSearchParams("code=not-a-login"))).toBeNull();
   });
 

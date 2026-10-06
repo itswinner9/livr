@@ -2,7 +2,6 @@ import { HomeDossier } from "@/components/home-dossier";
 import { JsonLd } from "@/components/json-ld";
 import { listingHref } from "@/components/listing-ui";
 import { listingFiltersFrom, loadListingMarketplace } from "@/lib/listings/page-data";
-import { oauthFinishRedirect } from "@/lib/auth/oauth";
 import { hasSupabaseConfig } from "@/lib/env";
 import {
   SITE_DESCRIPTION,
@@ -27,8 +26,6 @@ export default async function HomePage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await searchParams;
-  const finish = oauthFinishRedirect("/", params);
-  if (finish) redirect(finish);
   const filters = listingFiltersFrom(params);
   const cityPath = exploreCityRedirectPath(filters);
   if (cityPath) redirect(cityPath);

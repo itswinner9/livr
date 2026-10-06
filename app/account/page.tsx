@@ -3,7 +3,6 @@ import { AccountProfileForm } from "@/components/account-profile-form";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/status-badge";
-import { oauthFinishRedirect } from "@/lib/auth/oauth";
 import { getSessionUser, isStaff } from "@/lib/auth/session";
 import { signOutForm } from "@/lib/actions/forms";
 import { createServerSupabase } from "@/lib/supabase/server";
@@ -18,14 +17,7 @@ function planLabel(status: string) {
   return status.replace(/_/g, " ");
 }
 
-export default async function AccountPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ code?: string; next?: string; return?: string; intent?: string }>;
-}) {
-  const finish = oauthFinishRedirect("/account", await searchParams);
-  if (finish) redirect(finish);
-
+export default async function AccountPage() {
   const user = await getSessionUser();
   if (!user) redirect("/login?next=/account");
   const supabase = await createServerSupabase();

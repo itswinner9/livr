@@ -14,6 +14,20 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<ThemePreference>("dark");
 
   useLayoutEffect(() => {
+    // #region agent log
+    fetch("http://127.0.0.1:7857/ingest/eee90640-482f-42c8-8954-1cebbcfb48fe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "2a4cb8" },
+      body: JSON.stringify({
+        sessionId: "2a4cb8",
+        hypothesisId: "H5",
+        location: "components/theme-provider.tsx:mount",
+        message: "client page mount",
+        data: { href: window.location.href, pathname: window.location.pathname, search: window.location.search },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
     const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
     const prefersLight = window.matchMedia("(prefers-color-scheme: light)").matches;
     const next = resolveTheme(stored, prefersLight);
