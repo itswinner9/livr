@@ -1,4 +1,5 @@
 import {
+  getListingSnapshot,
   getOwnPendingRepliesByReview,
   getPropertyPageData,
   getPropertyReviews,
@@ -72,13 +73,14 @@ export default async function PropertyPage({
   if (`/property/${id}` !== canonical) redirect(canonical);
   const { property, ratingSummary, rentSummary, issues, aiSummary } = data;
   const reviewSort = sort ?? "recent";
-  const [sorted, units, nearby, session] = await Promise.all([
+  const [sorted, units, nearby, session, listingSnapshot] = await Promise.all([
     reviewSort === "recent"
       ? Promise.resolve({ reviews: data.recentReviews, total: data.reviewTotal })
       : getPropertyReviews(property.id, { sort: reviewSort, page: 1, pageSize: 10 }),
     getPropertyUnits(property.id),
     listNearbyProperties(property),
     getSessionUser(),
+    getListingSnapshot(property.id),
   ]);
   const reviewIds = sorted.reviews.map((review) => review.id);
   const [repliesByReview, pendingByReview, photosByReview] = await Promise.all([
@@ -113,6 +115,7 @@ export default async function PropertyPage({
         property={property}
         ratingSummary={ratingSummary}
         rentSummary={rentSummary}
+        listingSnapshot={listingSnapshot}
         issues={issues}
         aiSummary={aiSummary}
         reviews={sorted.reviews}

@@ -166,13 +166,19 @@ const cachedFacets = unstable_cache(
       cities.map((city) => [city, rows.filter((property) => property.city === city).length]),
     );
     const placeMap = new Map<string, { city: string; province: string; count: number }>();
+    const publishedPlaces = new Set<string>();
     for (const property of rows) {
       const key = `${property.city}|${property.province}`;
       const current = placeMap.get(key);
       if (current) current.count += 1;
       else placeMap.set(key, { city: property.city, province: property.province, count: 1 });
+      if (property.review_count > 0 || property.rent_report_count > 0) publishedPlaces.add(key);
     }
-    const cityPlaces = [...placeMap.values()].sort((a, b) => a.city.localeCompare(b.city));
+    // City pages 404 without published content, so only link those cities.
+    const cityPlaces = [...placeMap.entries()]
+      .filter(([key]) => publishedPlaces.has(key))
+      .map(([, place]) => place)
+      .sort((a, b) => a.city.localeCompare(b.city));
     return {
       cities,
       provinces,
@@ -184,7 +190,7 @@ const cachedFacets = unstable_cache(
       rentReportCount: rows.reduce((sum, property) => sum + property.rent_report_count, 0),
     };
   },
-  ["listing-facets-v2"],
+  ["listing-facets-v3"],
   { revalidate: 60, tags: [LISTINGS_TAG] },
 );
 
@@ -469,6 +475,39 @@ const cachedRentHistory = unstable_cache(
 
 export function getPropertyRentHistory(id: string): Promise<RentHistoryGroup[]> {
   return cachedRentHistory(id);
+}
+
+export type ListingSnapshot = {
+  source: string;
+  source_url: string | null;
+  score_10: number | null;
+  bedrooms: number | null;
+  asking_rent: number | null;
+  captured_at: string;
+};
+
+const cachedListingSnapshot = unstable_cache(
+  async (id: string): Promise<ListingSnapshot | null> => {
+    const supabase = createPublicSupabase();
+    if (!supabase) return null;
+    const { data, error } = await supabase
+      .from("listing_snapshots")
+      .select("source, source_url, score_10, bedrooms, asking_rent, captured_at")
+      .eq("property_id", id)
+      .maybeSingle();
+    logQueryError("getListingSnapshot", error);
+    if (!data) return null;
+    return {
+      ...data,
+      score_10: data.score_10 == null ? null : Number(data.score_10),
+    } as ListingSnapshot;
+  },
+  ["listing-snapshot-v1"],
+  { revalidate: 3600, tags: [LISTINGS_TAG] },
+);
+
+export function getListingSnapshot(id: string): Promise<ListingSnapshot | null> {
+  return cachedListingSnapshot(id);
 }
 
 const cachedLatestRents = unstable_cache(

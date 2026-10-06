@@ -20,7 +20,41 @@ import { cityCanonicalPath, propertyDisplayName, propertyFaqs, provinceExplorePa
 import { formatCad, formatDate, cn } from "@/lib/utils";
 import { PROPERTY_TYPE_LABELS, type IssueMention, type Property, type RatingSummary, type RentHistoryGroup } from "@/types/property";
 import type { OwnPendingReply, PublicReviewReply, Review, ReviewPhoto } from "@/types/review";
-import type { PublicPropertyUnit } from "@/lib/properties/queries";
+import type { ListingSnapshot, PublicPropertyUnit } from "@/lib/properties/queries";
+
+function bedroomLabel(bedrooms: number) {
+  return bedrooms === 0 ? "studio" : `${bedrooms}-bedroom`;
+}
+
+function ListingSnapshotNote({ snapshot }: { snapshot: ListingSnapshot }) {
+  const captured = new Date(snapshot.captured_at).toLocaleDateString("en-CA", { month: "long", year: "numeric" });
+  const source = snapshot.source_url ? (
+    <a href={snapshot.source_url} rel="nofollow noopener" target="_blank" className="font-semibold text-ink hover:text-accent">
+      {snapshot.source}
+    </a>
+  ) : (
+    snapshot.source
+  );
+  return (
+    <div className="mt-4 border-t border-rule pt-3 text-sm text-mute">
+      <p className="font-semibold text-ink">Listing snapshot, {captured}</p>
+      <p className="mt-1">
+        {snapshot.asking_rent != null ? (
+          <>
+            Asking <span className="figure text-ink">{formatCad(snapshot.asking_rent)}</span>
+            {snapshot.bedrooms != null ? ` for a ${bedroomLabel(snapshot.bedrooms)}` : ""}.{" "}
+          </>
+        ) : null}
+        {snapshot.score_10 != null ? (
+          <>
+            Listing score <span className="figure text-ink">{snapshot.score_10.toFixed(1)}/10</span>.
+          </>
+        ) : null}
+      </p>
+      <p className="mt-1 text-xs">Source: {source}. Not from renters, and not part of the LivRank rating.</p>
+    </div>
+  );
+}
 
 function latestReportedRent(groups: RentHistoryGroup[]) {
   let best: { year: number; amount: number; bedrooms: number } | null = null;
@@ -76,6 +110,7 @@ export function PropertyDossier({
   property,
   ratingSummary,
   rentSummary,
+  listingSnapshot,
   issues,
   aiSummary,
   reviews,
@@ -91,6 +126,7 @@ export function PropertyDossier({
   property: Property;
   ratingSummary: RatingSummary;
   rentSummary: RentHistoryGroup[];
+  listingSnapshot?: ListingSnapshot | null;
   issues: IssueMention[];
   aiSummary: { summary_text: string } | null;
   reviews: Review[];
@@ -353,6 +389,7 @@ export function PropertyDossier({
               <div className="mt-3">
                 <RentHistory groups={rentSummary} />
               </div>
+              {listingSnapshot ? <ListingSnapshotNote snapshot={listingSnapshot} /> : null}
             </div>
             <div id="history" className="scroll-mt-32 rounded-md bg-surface p-5 border border-rule">
               <h2 className="text-xl font-bold text-ink">Building history</h2>
