@@ -17,17 +17,21 @@ export async function GET(request: NextRequest) {
   const intent = request.nextUrl.searchParams.get("intent");
   const code = request.nextUrl.searchParams.get("code");
   const flowId = request.nextUrl.searchParams.get("sb_flow_id");
+  const origin = publicRequestOrigin(request);
   const jar: Parameters<typeof redirectWithCookies>[1] = [];
 
   if (!code) return NextResponse.redirect(failUrl(request, next, intent));
 
-  const supabase = createRouteSupabase(request, jar);
+  const supabase = createRouteSupabase(request, jar, origin);
   if (!supabase) return NextResponse.redirect(failUrl(request, next, intent, "auth"));
 
   const { error } = flowId
     ? await supabase.auth.exchangeCodeForSession(code, { flowId })
     : await supabase.auth.exchangeCodeForSession(code);
-  if (error) return redirectWithCookies(failUrl(request, next, intent), jar);
+  if (error) {
+    const { data } = await supabase.auth.getUser();
+    if (!data.user) return redirectWithCookies(failUrl(request, next, intent), jar, origin);
+  }
 
-  return redirectWithCookies(new URL(next, `${publicRequestOrigin(request)}/`), jar);
+  return redirectWithCookies(new URL(next, `${origin}/`), jar, origin);
 }
